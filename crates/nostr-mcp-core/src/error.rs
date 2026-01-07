@@ -12,6 +12,8 @@ pub enum CoreError {
     Base64(String),
     #[error("serde json error: {0}")]
     SerdeJson(String),
+    #[error("keyring error: {0}")]
+    Keyring(String),
 }
 
 impl CoreError {

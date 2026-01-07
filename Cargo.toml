@@ -18,6 +18,7 @@ readme = "README.md"
 aes-gcm = "0.10"
 argon2 = { version = "0.5", features = ["std"] }
 base64 = "0.22"
+keyring = "2"
 nostr = { version = "0.44.1" }
 nostr-relay-pool = { version = "0.44.0" }
 nostr-sdk = { version = "0.44.1" }
