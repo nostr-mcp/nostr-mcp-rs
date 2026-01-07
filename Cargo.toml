@@ -18,6 +18,9 @@ readme = "README.md"
 nostr = { version = "0.44.1" }
 nostr-relay-pool = { version = "0.44.0" }
 nostr-sdk = { version = "0.44.1" }
+schemars = "1.0"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1.0"
 
 [workspace.metadata]
 authors = ["Nostr MCP Developers"]
