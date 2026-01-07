@@ -1,0 +1,28 @@
+[workspace]
+members = [
+    "crates/*",
+]
+resolver = "2"
+
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.85.0"
+license = "Unlicense"
+homepage = "https://github.com/nostr-mcp/nostr-mcp-rs"
+repository = "https://github.com/nostr-mcp/nostr-mcp-rs.git"
+version = "0.1.0"
+readme = "README.md"
+
+[workspace.dependencies]
+nostr = { version = "0.44.1" }
+nostr-relay-pool = { version = "0.44.0" }
+nostr-sdk = { version = "0.44.1" }
+
+[workspace.metadata]
+authors = ["Nostr MCP Developers"]
+description = "Nostr MCP Rust SDK"
+readme = "README.md"
+repository = "https://github.com/nostr-mcp/nostr-mcp-rs"
+license-file = "LICENSE"
+keywords = ["nostr", "mcp", "rust"]
