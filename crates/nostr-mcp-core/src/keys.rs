@@ -233,7 +233,7 @@ mod tests {
         let err = derive_public_from_private("not-a-key").unwrap_err();
         assert_eq!(
             err.to_string(),
-            "Invalid private key format. Expected nsec1... or 64-character hex"
+            "invalid input: Invalid private key format. Expected nsec1... or 64-character hex"
         );
     }
 }
