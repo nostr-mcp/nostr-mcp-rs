@@ -2,6 +2,7 @@
 
 pub mod error;
 mod fs;
+pub mod follows;
 pub mod keys;
 pub mod key_store;
 pub mod keystore;

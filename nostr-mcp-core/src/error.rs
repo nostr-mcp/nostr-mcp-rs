@@ -14,6 +14,8 @@ pub enum CoreError {
     SerdeJson(String),
     #[error("keyring error: {0}")]
     Keyring(String),
+    #[error("nostr error: {0}")]
+    Nostr(String),
 }
 
 impl CoreError {
