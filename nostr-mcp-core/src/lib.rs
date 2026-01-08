@@ -4,6 +4,7 @@ pub mod error;
 mod fs;
 pub mod client;
 pub mod follows;
+pub mod relays;
 pub mod metadata;
 pub mod keys;
 pub mod key_store;
