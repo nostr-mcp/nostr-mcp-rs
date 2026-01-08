@@ -2,6 +2,7 @@
 
 pub mod error;
 mod fs;
+pub mod client;
 pub mod follows;
 pub mod metadata;
 pub mod keys;

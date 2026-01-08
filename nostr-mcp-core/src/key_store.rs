@@ -274,6 +274,10 @@ impl KeyStore {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn secrets(&self) -> Arc<dyn SecretStore> {
+        self.secrets.clone()
+    }
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
