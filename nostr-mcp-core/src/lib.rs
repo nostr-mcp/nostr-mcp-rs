@@ -8,6 +8,7 @@ pub mod follows;
 pub mod relays;
 pub mod publish;
 pub mod metadata;
+pub mod replies;
 pub mod keys;
 pub mod key_store;
 pub mod keystore;
