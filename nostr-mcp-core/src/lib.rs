@@ -6,6 +6,7 @@ pub mod client;
 pub mod events;
 pub mod follows;
 pub mod relays;
+pub mod publish;
 pub mod metadata;
 pub mod keys;
 pub mod key_store;
