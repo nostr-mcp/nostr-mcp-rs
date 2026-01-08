@@ -3,6 +3,7 @@
 pub mod error;
 mod fs;
 pub mod client;
+pub mod events;
 pub mod follows;
 pub mod relays;
 pub mod metadata;
