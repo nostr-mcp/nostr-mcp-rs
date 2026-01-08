@@ -3,6 +3,7 @@
 pub mod error;
 mod fs;
 pub mod follows;
+pub mod metadata;
 pub mod keys;
 pub mod key_store;
 pub mod keystore;
