@@ -1,0 +1,37 @@
+[package]
+name = "nostr-mcp-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+license = "Unlicense"
+homepage = "https://github.com/nostr-mcp/nostr-mcp-rs"
+repository = "https://github.com/nostr-mcp/nostr-mcp-rs.git"
+readme = "README.md"
+
+authors = ["Nostr MCP Developers"]
+description = "Nostr MCP Rust SDK"
+keywords = ["nostr", "mcp", "rust"]
+
+[dependencies]
+aes-gcm = { workspace = true }
+argon2 = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+keyring = { workspace = true, optional = true }
+nostr = { workspace = true }
+nostr-relay-pool = { workspace = true }
+nostr-sdk = { workspace = true }
+rand = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+zeroize = { workspace = true }
+
+[features]
+keyring = ["dep:keyring"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

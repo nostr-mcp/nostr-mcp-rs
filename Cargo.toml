@@ -1,26 +1,24 @@
-[package]
-name = "nostr-mcp-core"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "nostr-mcp-core",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
 rust-version = "1.85.0"
 license = "Unlicense"
 homepage = "https://github.com/nostr-mcp/nostr-mcp-rs"
 repository = "https://github.com/nostr-mcp/nostr-mcp-rs.git"
+version = "0.1.0"
 readme = "README.md"
 
-authors = ["Nostr MCP Developers"]
-description = "Nostr MCP Rust SDK"
-keywords = ["nostr", "mcp", "rust"]
-
-[workspace]
-resolver = "2"
-
-[dependencies]
+[workspace.dependencies]
 aes-gcm = "0.10"
 argon2 = { version = "0.5", features = ["std"] }
 base64 = "0.22"
-keyring = { version = "2", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+keyring = "2"
 nostr = { version = "0.44.1" }
 nostr-relay-pool = { version = "0.44.0" }
 nostr-sdk = { version = "0.44.1" }
@@ -28,13 +26,15 @@ rand = "0.8"
 schemars = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 thiserror = "1.0"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "macros", "rt"] }
 zeroize = "1.7"
 
-[features]
-keyring = ["dep:keyring"]
-
-[dev-dependencies]
-tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt"] }
+[workspace.metadata]
+authors = ["Nostr MCP Developers"]
+description = "Nostr MCP Rust SDK"
+readme = "README.md"
+repository = "https://github.com/nostr-mcp/nostr-mcp-rs"
+license-file = "LICENSE"
+keywords = ["nostr", "mcp", "rust"]
