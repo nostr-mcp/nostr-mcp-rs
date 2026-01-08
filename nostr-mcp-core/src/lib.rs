@@ -10,6 +10,7 @@ pub mod publish;
 pub mod metadata;
 pub mod replies;
 pub mod polls;
+pub mod groups;
 pub mod keys;
 pub mod key_store;
 pub mod keystore;
