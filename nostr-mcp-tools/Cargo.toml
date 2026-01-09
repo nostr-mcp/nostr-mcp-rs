@@ -1,0 +1,28 @@
+[package]
+name = "nostr-mcp-tools"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+license = "Unlicense"
+homepage = "https://github.com/nostr-mcp/nostr-mcp-rs"
+repository = "https://github.com/nostr-mcp/nostr-mcp-rs.git"
+readme = "README.md"
+
+authors = ["Nostr MCP Developers"]
+description = "Nostr MCP tools server"
+keywords = ["nostr", "mcp", "rust"]
+
+[dependencies]
+anyhow = { workspace = true }
+dirs = { workspace = true }
+nostr-mcp-core = { path = "../nostr-mcp-core" }
+nostr-sdk = { workspace = true }
+rmcp = { workspace = true, features = ["server", "macros", "transport-io", "schemars"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
+tracing = { workspace = true }
+
+[features]
+keyring = ["nostr-mcp-core/keyring"]
