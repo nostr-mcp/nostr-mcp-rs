@@ -50,6 +50,12 @@ pub struct PostReactionArgs {
     pub to_relays: Option<Vec<String>>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PublishRawEventArgs {
+    pub event_json: String,
+    pub to_relays: Option<Vec<String>>,
+}
+
 pub async fn publish_event_builder(
     client: &Client,
     builder: EventBuilder,
@@ -90,6 +96,48 @@ pub async fn publish_event_builder(
         failed,
         pubkey,
     })
+}
+
+pub async fn publish_raw_event(
+    client: &Client,
+    args: PublishRawEventArgs,
+) -> Result<SendResult, CoreError> {
+    let event = parse_signed_event(&args.event_json)?;
+    let out = if let Some(urls) = args.to_relays {
+        client
+            .send_event_to(urls, &event)
+            .await
+            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+    } else {
+        client
+            .send_event(&event)
+            .await
+            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+    };
+
+    let id = out.id().to_string();
+    let success = out.success.into_iter().map(|u| u.to_string()).collect();
+    let failed = out
+        .failed
+        .into_iter()
+        .map(|(u, e)| (u.to_string(), e.to_string()))
+        .collect();
+
+    Ok(SendResult {
+        id,
+        success,
+        failed,
+        pubkey: event.pubkey.to_hex(),
+    })
+}
+
+fn parse_signed_event(event_json: &str) -> Result<Event, CoreError> {
+    let event =
+        Event::from_json(event_json).map_err(|e| CoreError::invalid_input(format!("invalid event json: {e}")))?;
+    event
+        .verify()
+        .map_err(|e| CoreError::invalid_input(format!("invalid event signature: {e}")))?;
+    Ok(event)
 }
 
 pub async fn post_text_note(client: &Client, args: PostTextArgs) -> Result<SendResult, CoreError> {
@@ -224,7 +272,11 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 
 #[cfg(test)]
 mod tests {
-    use super::{group_chat_tags, reaction_payload, thread_tags, PostGroupChatArgs, PostReactionArgs, PostThreadArgs};
+    use super::{
+        group_chat_tags, parse_signed_event, reaction_payload, thread_tags, PostGroupChatArgs,
+        PostReactionArgs, PostThreadArgs,
+    };
+    use nostr_sdk::prelude::*;
 
     #[test]
     fn thread_tags_include_subject_and_hashtags() {
@@ -274,5 +326,30 @@ mod tests {
 
         let (_target, content) = reaction_payload(&args).unwrap();
         assert_eq!(content, "+");
+    }
+
+    #[test]
+    fn parse_signed_event_rejects_bad_signature() {
+        let keys = Keys::generate();
+        let event = EventBuilder::text_note("hello")
+            .sign_with_keys(&keys)
+            .unwrap();
+        let mut value = serde_json::to_value(&event).unwrap();
+        if let Some(sig) = value.get_mut("sig") {
+            *sig = serde_json::Value::String("0".repeat(128));
+        }
+        let json = serde_json::to_string(&value).unwrap();
+        let err = parse_signed_event(&json).unwrap_err();
+        assert!(err.to_string().contains("invalid event signature"));
+    }
+
+    #[test]
+    fn parse_signed_event_accepts_valid_event() {
+        let keys = Keys::generate();
+        let event = EventBuilder::text_note("hello")
+            .sign_with_keys(&keys)
+            .unwrap();
+        let json = serde_json::to_string(&event).unwrap();
+        parse_signed_event(&json).unwrap();
     }
 }

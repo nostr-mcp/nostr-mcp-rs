@@ -29,8 +29,8 @@ use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
 use nostr_mcp_core::publish::{
-    post_group_chat, post_reaction, post_text_note, post_thread, PostGroupChatArgs, PostReactionArgs,
-    PostTextArgs, PostThreadArgs,
+    post_group_chat, post_reaction, post_text_note, post_thread, publish_raw_event,
+    PostGroupChatArgs, PostReactionArgs, PostTextArgs, PostThreadArgs, PublishRawEventArgs,
 };
 use nostr_mcp_core::relays::{
     connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
@@ -627,6 +627,25 @@ impl NostrMcpServer {
             .await
             .map_err(core_error)?;
         let result = post_reaction(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Publish a fully signed raw Nostr event (NIP-01). Validates event structure and signature before publishing. Optional: to_relays (urls)"
+    )]
+    pub async fn nostr_events_publish_raw(
+        &self,
+        Parameters(args): Parameters<PublishRawEventArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss)
+            .await
+            .map_err(core_error)?;
+        let result = publish_raw_event(&ac.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -1289,7 +1308,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_get_public_from_private, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_active, nostr_keys_rename_label, nostr_config_dir, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_get_public_from_private, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_active, nostr_keys_rename_label, nostr_config_dir, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_raw, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
