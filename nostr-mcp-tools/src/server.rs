@@ -24,6 +24,7 @@ use nostr_mcp_core::metadata::{
     args_to_profile, fetch_metadata, publish_metadata, FetchMetadataArgs, MetadataResult,
     SetMetadataArgs,
 };
+use nostr_mcp_core::nip01;
 use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
@@ -470,6 +471,10 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<EventsListArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        nip01::validate_time_bounds(args.since, args.until)
+            .map_err(core_error)?;
+        nip01::validate_limit(args.limit)
+            .map_err(core_error)?;
         let ks = Self::keystore().await?;
         let ss = Self::settings_store().await?;
         let ac = ensure_client(ks, ss.clone())
