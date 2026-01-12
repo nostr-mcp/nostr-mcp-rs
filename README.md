@@ -2,6 +2,8 @@
 
 Rust workspace for shared Nostr MCP utilities and a reference MCP tools server.
 
+Spec: https://github.com/nostr-mcp/spec
+
 ## Crates
 
 - `nostr-mcp-core`: core storage, keys, relays, events, metadata, follows, polls, groups, and publishing helpers.
