@@ -22,17 +22,18 @@ use nostr_mcp_core::key_store::{
 };
 use nostr_mcp_core::keys::{derive_public, verify_key, DerivePublicArgs, VerifyArgs};
 use nostr_mcp_core::metadata::{
-    args_to_profile, fetch_metadata, publish_metadata, FetchMetadataArgs, MetadataResult,
-    SetMetadataArgs,
+    args_to_profile, fetch_metadata, fetch_profile, publish_metadata, FetchMetadataArgs,
+    MetadataResult, ProfileGetArgs, SetMetadataArgs,
 };
 use nostr_mcp_core::nip01;
 use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
 use nostr_mcp_core::publish::{
-    post_group_chat, post_long_form, post_reaction, post_text_note, post_thread,
-    publish_signed_event, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostTextArgs,
-    PostThreadArgs, PublishSignedEventArgs,
+    create_text_event, post_anonymous_note, post_group_chat, post_long_form, post_reaction,
+    post_text_note, post_thread, publish_signed_event, sign_unsigned_event, CreateTextArgs,
+    PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostTextArgs,
+    PostThreadArgs, PublishSignedEventArgs, SignEventArgs,
 };
 use nostr_mcp_core::relays::{
     connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
@@ -636,6 +637,49 @@ impl NostrMcpServer {
     }
 
     #[tool(
+        description = "Create an unsigned kind=1 text note using the active key (NIP-01). Returns event JSON with computed id for signing or publishing. Optional: tags (array of tag arrays), created_at (unix timestamp)"
+    )]
+    pub async fn nostr_events_create_text(
+        &self,
+        Parameters(args): Parameters<CreateTextArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let active = ks.get_active().await.ok_or_else(|| {
+            ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
+        })?;
+        let pubkey = PublicKey::from_bech32(&active.public_key)
+            .map_err(invalid_params)?;
+
+        let result = create_text_event(pubkey, args)
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Sign an unsigned Nostr event JSON using the active key. The unsigned event pubkey must match the active key. Returns signed event JSON."
+    )]
+    pub async fn nostr_events_sign(
+        &self,
+        Parameters(args): Parameters<SignEventArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss)
+            .await
+            .map_err(core_error)?;
+        let signer = ac.client.signer()
+            .await
+            .map_err(|e| core_error(CoreError::Nostr(format!("get signer: {e}"))))?;
+
+        let result = sign_unsigned_event(&signer, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
         description = "Post a new kind=1 text note to configured relays using the active key. The note will be signed with the currently active key. Returns the event ID and the pubkey that signed it for verification. Optional: pow (u8), to_relays (urls)"
     )]
     pub async fn nostr_events_post_text(
@@ -648,6 +692,25 @@ impl NostrMcpServer {
             .await
             .map_err(core_error)?;
         let result = post_text_note(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Post a kind=1 text note using a one-time keypair (anonymous). Returns the event ID and pubkey used to sign it. Optional: tags (array of tag arrays), pow (u8), to_relays (urls)"
+    )]
+    pub async fn nostr_events_post_anonymous(
+        &self,
+        Parameters(args): Parameters<PostAnonymousArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss)
+            .await
+            .map_err(core_error)?;
+        let result = post_anonymous_note(&ac.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -1132,6 +1195,26 @@ impl NostrMcpServer {
     }
 
     #[tool(
+        description = "Fetch kind 0 profile metadata for a pubkey (hex or npub). Optional: timeout_secs (default: 10)."
+    )]
+    pub async fn nostr_profiles_get(
+        &self,
+        Parameters(args): Parameters<ProfileGetArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss)
+            .await
+            .map_err(core_error)?;
+
+        let result = fetch_profile(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
         description = "Set kind 3 follow list for the active key. Replaces entire follow list. Set publish=true to broadcast to relays immediately (default: true). Each follow must have pubkey (hex), optional relay_url, and optional petname. Returns the event ID and pubkey that signed it for verification"
     )]
     pub async fn nostr_follows_set(
@@ -1405,7 +1488,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_list_long_form, nostr_events_query, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_list_long_form, nostr_events_query, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
@@ -1463,6 +1546,10 @@ mod tests {
         assert!(server.tool_router.has_route("nostr_events_list_long_form"));
         assert!(server.tool_router.has_route("nostr_events_query"));
         assert!(server.tool_router.has_route("nostr_events_post_long_form"));
+        assert!(server.tool_router.has_route("nostr_events_create_text"));
+        assert!(server.tool_router.has_route("nostr_events_sign"));
+        assert!(server.tool_router.has_route("nostr_events_post_anonymous"));
+        assert!(server.tool_router.has_route("nostr_profiles_get"));
     }
 
     #[test]

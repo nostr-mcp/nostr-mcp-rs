@@ -24,6 +24,18 @@ pub struct FetchMetadataArgs {
     pub label: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ProfileGetArgs {
+    pub pubkey: String,
+    pub timeout_secs: Option<u64>,
+}
+
+impl ProfileGetArgs {
+    pub fn timeout(&self) -> u64 {
+        self.timeout_secs.unwrap_or(10)
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct MetadataResult {
     pub saved: bool,
@@ -32,6 +44,12 @@ pub struct MetadataResult {
     pub pubkey: Option<String>,
     pub success_relays: Vec<String>,
     pub failed_relays: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProfileGetResult {
+    pub pubkey: String,
+    pub metadata: Option<Metadata>,
 }
 
 pub fn profile_to_nostr_metadata(profile: &ProfileMetadata) -> Result<Metadata, CoreError> {
@@ -131,10 +149,18 @@ pub async fn fetch_metadata(
     client: &Client,
     pubkey: &PublicKey,
 ) -> Result<Option<Metadata>, CoreError> {
+    fetch_metadata_with_timeout(client, pubkey, 10).await
+}
+
+pub async fn fetch_metadata_with_timeout(
+    client: &Client,
+    pubkey: &PublicKey,
+    timeout_secs: u64,
+) -> Result<Option<Metadata>, CoreError> {
     let filter = Filter::new().author(*pubkey).kind(Kind::Metadata).limit(1);
 
     let events = client
-        .fetch_events(filter, std::time::Duration::from_secs(10))
+        .fetch_events(filter, std::time::Duration::from_secs(timeout_secs))
         .await
         .map_err(|e| CoreError::Nostr(format!("fetch metadata: {e}")))?;
 
@@ -147,9 +173,41 @@ pub async fn fetch_metadata(
     }
 }
 
+pub async fn fetch_profile(
+    client: &Client,
+    args: ProfileGetArgs,
+) -> Result<ProfileGetResult, CoreError> {
+    let pubkey = parse_pubkey(&args.pubkey)?;
+    let metadata = fetch_metadata_with_timeout(client, &pubkey, args.timeout()).await?;
+    let pubkey_bech32 = pubkey
+        .to_bech32()
+        .map_err(|e| CoreError::invalid_input(format!("invalid pubkey: {e}")))?;
+
+    Ok(ProfileGetResult {
+        pubkey: pubkey_bech32,
+        metadata,
+    })
+}
+
+fn parse_pubkey(value: &str) -> Result<PublicKey, CoreError> {
+    let value = value.trim();
+    if value.starts_with("npub1") {
+        PublicKey::from_bech32(value)
+            .map_err(|e| CoreError::invalid_input(format!("invalid npub: {e}")))
+    } else if value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()) {
+        PublicKey::from_hex(value)
+            .map_err(|e| CoreError::invalid_input(format!("invalid hex pubkey: {e}")))
+    } else {
+        Err(CoreError::invalid_input(
+            "invalid pubkey format; expected npub1... or 64-character hex",
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{args_to_profile, profile_to_nostr_metadata, SetMetadataArgs};
+    use super::{args_to_profile, parse_pubkey, profile_to_nostr_metadata, SetMetadataArgs};
+    use nostr_sdk::prelude::*;
 
     #[test]
     fn args_to_profile_maps_fields() {
@@ -188,5 +246,18 @@ mod tests {
 
         let err = profile_to_nostr_metadata(&profile).unwrap_err();
         assert!(err.to_string().contains("invalid picture url"));
+    }
+
+    #[test]
+    fn parse_pubkey_accepts_npub_and_hex() {
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let hex = keys.public_key().to_hex();
+
+        let parsed_npub = parse_pubkey(&npub).unwrap();
+        let parsed_hex = parse_pubkey(&hex).unwrap();
+
+        assert_eq!(parsed_npub, keys.public_key());
+        assert_eq!(parsed_hex, keys.public_key());
     }
 }

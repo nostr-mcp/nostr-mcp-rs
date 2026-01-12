@@ -20,6 +20,20 @@ pub struct PostTextArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateTextArgs {
+    pub content: String,
+    pub tags: Option<Vec<Vec<String>>>,
+    pub created_at: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateTextResult {
+    pub event_id: String,
+    pub pubkey: String,
+    pub unsigned_event_json: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct PostThreadArgs {
     pub content: String,
     pub subject: String,
@@ -64,9 +78,29 @@ pub struct PostReactionArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct PostAnonymousArgs {
+    pub content: String,
+    pub tags: Option<Vec<Vec<String>>>,
+    pub pow: Option<u8>,
+    pub to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct PublishSignedEventArgs {
     pub event_json: String,
     pub to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SignEventArgs {
+    pub unsigned_event_json: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SignEventResult {
+    pub event_id: String,
+    pub pubkey: String,
+    pub event_json: String,
 }
 
 pub async fn publish_event_builder(
@@ -153,6 +187,84 @@ fn parse_signed_event(event_json: &str) -> Result<Event, CoreError> {
     Ok(event)
 }
 
+fn parse_unsigned_event(event_json: &str) -> Result<UnsignedEvent, CoreError> {
+    let unsigned = UnsignedEvent::from_json(event_json)
+        .map_err(|e| CoreError::invalid_input(format!("invalid unsigned event json: {e}")))?;
+    unsigned
+        .verify_id()
+        .map_err(|e| CoreError::invalid_input(format!("invalid unsigned event id: {e}")))?;
+    Ok(unsigned)
+}
+
+fn parse_tags(raw_tags: Option<Vec<Vec<String>>>) -> Result<Vec<Tag>, CoreError> {
+    let mut tags = Vec::new();
+
+    if let Some(raw_tags) = raw_tags {
+        for values in raw_tags {
+            let tag = Tag::parse(&values)
+                .map_err(|e| CoreError::invalid_input(format!("invalid tag: {e}")))?;
+            tags.push(tag);
+        }
+    }
+
+    Ok(tags)
+}
+
+pub fn create_text_event(
+    pubkey: PublicKey,
+    args: CreateTextArgs,
+) -> Result<CreateTextResult, CoreError> {
+    let tags = parse_tags(args.tags)?;
+    let mut builder = EventBuilder::text_note(args.content)
+        .tags(tags)
+        .allow_self_tagging();
+
+    if let Some(created_at) = args.created_at {
+        builder = builder.custom_created_at(Timestamp::from(created_at));
+    }
+
+    let mut unsigned = builder.build(pubkey);
+    let event_id = unsigned.id().to_string();
+    let unsigned_event_json = unsigned.as_json();
+
+    Ok(CreateTextResult {
+        event_id,
+        pubkey: pubkey.to_hex(),
+        unsigned_event_json,
+    })
+}
+
+pub async fn sign_unsigned_event<T>(
+    signer: &T,
+    args: SignEventArgs,
+) -> Result<SignEventResult, CoreError>
+where
+    T: NostrSigner,
+{
+    let unsigned = parse_unsigned_event(&args.unsigned_event_json)?;
+    let signer_pubkey = signer
+        .get_public_key()
+        .await
+        .map_err(|e| CoreError::Nostr(format!("get signer pubkey: {e}")))?;
+
+    if unsigned.pubkey != signer_pubkey {
+        return Err(CoreError::invalid_input(
+            "unsigned event pubkey does not match active key",
+        ));
+    }
+
+    let event = unsigned
+        .sign(signer)
+        .await
+        .map_err(|e| CoreError::Nostr(format!("sign event: {e}")))?;
+
+    Ok(SignEventResult {
+        event_id: event.id.to_string(),
+        pubkey: event.pubkey.to_hex(),
+        event_json: event.as_json(),
+    })
+}
+
 pub async fn post_text_note(client: &Client, args: PostTextArgs) -> Result<SendResult, CoreError> {
     let mut builder = EventBuilder::text_note(args.content);
     if let Some(pow) = args.pow {
@@ -207,6 +319,34 @@ pub async fn post_long_form(
     }
 
     publish_event_builder(client, builder, args.to_relays).await
+}
+
+pub async fn post_anonymous_note(
+    client: &Client,
+    args: PostAnonymousArgs,
+) -> Result<SendResult, CoreError> {
+    let keys = Keys::generate();
+    let tags = parse_tags(args.tags)?;
+    let mut builder = EventBuilder::text_note(args.content)
+        .tags(tags)
+        .allow_self_tagging();
+
+    if let Some(pow) = args.pow {
+        builder = builder.pow(pow);
+    }
+
+    let event = builder
+        .sign_with_keys(&keys)
+        .map_err(|e| CoreError::Nostr(format!("sign event: {e}")))?;
+
+    publish_signed_event(
+        client,
+        PublishSignedEventArgs {
+            event_json: event.as_json(),
+            to_relays: args.to_relays,
+        },
+    )
+    .await
 }
 
 fn long_form_tags(args: &PostLongFormArgs) -> Result<Vec<Tag>, CoreError> {
@@ -371,8 +511,9 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 #[cfg(test)]
 mod tests {
     use super::{
-        group_chat_tags, long_form_tags, parse_signed_event, reaction_payload, thread_tags,
-        PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostThreadArgs,
+        create_text_event, group_chat_tags, long_form_tags, parse_signed_event, reaction_payload,
+        sign_unsigned_event, thread_tags, CreateTextArgs, PostGroupChatArgs, PostLongFormArgs,
+        PostReactionArgs, PostThreadArgs, SignEventArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -454,6 +595,56 @@ mod tests {
 
         let err = long_form_tags(&args).unwrap_err();
         assert!(err.to_string().contains("identifier must not be empty"));
+    }
+
+    #[test]
+    fn create_text_event_emits_unsigned_json() {
+        let keys = Keys::generate();
+        let args = CreateTextArgs {
+            content: "hello".to_string(),
+            tags: Some(vec![vec!["t".to_string(), "nostr".to_string()]]),
+            created_at: Some(10),
+        };
+
+        let result = create_text_event(keys.public_key(), args).unwrap();
+        let unsigned = UnsignedEvent::from_json(&result.unsigned_event_json).unwrap();
+
+        assert_eq!(result.pubkey, keys.public_key().to_hex());
+        assert_eq!(unsigned.content, "hello");
+        assert!(unsigned.id.is_some());
+        assert!(unsigned.tags.iter().any(|tag| {
+            let values = tag.as_slice();
+            values.len() == 2 && values[0] == "t" && values[1] == "nostr"
+        }));
+    }
+
+    #[tokio::test]
+    async fn sign_unsigned_event_rejects_mismatched_pubkey() {
+        let keys_a = Keys::generate();
+        let keys_b = Keys::generate();
+        let unsigned = EventBuilder::text_note("hello").build(keys_a.public_key());
+        let args = SignEventArgs {
+            unsigned_event_json: unsigned.as_json(),
+        };
+
+        let err = sign_unsigned_event(&keys_b, args).await.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("unsigned event pubkey does not match"));
+    }
+
+    #[tokio::test]
+    async fn sign_unsigned_event_accepts_matching_pubkey() {
+        let keys = Keys::generate();
+        let unsigned = EventBuilder::text_note("hello").build(keys.public_key());
+        let args = SignEventArgs {
+            unsigned_event_json: unsigned.as_json(),
+        };
+
+        let result = sign_unsigned_event(&keys, args).await.unwrap();
+        let event = Event::from_json(&result.event_json).unwrap();
+        assert_eq!(event.pubkey, keys.public_key());
+        assert_eq!(result.event_id, event.id.to_string());
     }
 
     #[test]
