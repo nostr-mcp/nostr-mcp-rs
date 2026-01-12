@@ -133,8 +133,8 @@ impl NostrMcpServer {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ConfigDirArgs {
-    pub path: Option<String>,
+pub struct ConfigDirSetArgs {
+    pub path: String,
 }
 
 #[tool_router]
@@ -237,7 +237,7 @@ impl NostrMcpServer {
     }
 
     #[tool(description = "Get the active key (metadata only)")]
-    pub async fn nostr_keys_active(
+    pub async fn nostr_keys_get_active(
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
@@ -303,7 +303,7 @@ impl NostrMcpServer {
     #[tool(
         description = "Derive public key from a private key. Accepts nsec or hex private key format"
     )]
-    pub async fn nostr_keys_get_public_from_private(
+    pub async fn nostr_keys_derive_public(
         &self,
         Parameters(args): Parameters<DerivePublicArgs>,
     ) -> Result<CallToolResult, ErrorData> {
@@ -313,31 +313,43 @@ impl NostrMcpServer {
         Ok(CallToolResult::success(vec![content]))
     }
 
-    #[tool(description = "Get or set the directory used to persist the key index (no secrets)")]
-    pub async fn nostr_config_dir(
+    #[tool(description = "Get the directory used to persist the key index (no secrets)")]
+    pub async fn nostr_config_dir_get(
         &self,
-        Parameters(args): Parameters<ConfigDirArgs>,
+        _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        if let Some(p) = args.path {
-            std::env::set_var("GOOSTR_DIR", p);
-            let path = util::nostr_index_path();
-            let new_store = load_or_init_keystore(path)
-                .await
-                .map_err(core_error)?;
-            let cell = KEYSTORE
-                .get_or_try_init(|| async {
-                    let path = util::nostr_index_path();
-                    let ks = load_or_init_keystore(path).await?;
-                    Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(Arc::new(ks)))
-                })
-                .await
-                .map_err(core_error)?;
-            let mut w = cell.write().await;
-            *w = Arc::new(new_store);
-            reset_cached_client()
-                .await
-                .map_err(core_error)?;
-        }
+        let current = util::nostr_config_root();
+        let content = Content::json(serde_json::json!({
+            "dir": current,
+            "file": util::nostr_index_path()
+        }))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(description = "Set the directory used to persist the key index (no secrets)")]
+    pub async fn nostr_config_dir_set(
+        &self,
+        Parameters(args): Parameters<ConfigDirSetArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        std::env::set_var("GOOSTR_DIR", args.path);
+        let path = util::nostr_index_path();
+        let new_store = load_or_init_keystore(path)
+            .await
+            .map_err(core_error)?;
+        let cell = KEYSTORE
+            .get_or_try_init(|| async {
+                let path = util::nostr_index_path();
+                let ks = load_or_init_keystore(path).await?;
+                Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(Arc::new(ks)))
+            })
+            .await
+            .map_err(core_error)?;
+        let mut w = cell.write().await;
+        *w = Arc::new(new_store);
+        reset_cached_client()
+            .await
+            .map_err(core_error)?;
+
         let current = util::nostr_config_root();
         let content = Content::json(serde_json::json!({
             "dir": current,
@@ -666,9 +678,9 @@ impl NostrMcpServer {
     }
 
     #[tool(
-        description = "Publish a fully signed raw Nostr event (NIP-01). Validates event structure and signature before publishing. Optional: to_relays (urls)"
+        description = "Publish a fully signed Nostr event (NIP-01). Validates event structure and signature before publishing. Optional: to_relays (urls)"
     )]
-    pub async fn nostr_events_publish_raw(
+    pub async fn nostr_events_publish_signed(
         &self,
         Parameters(args): Parameters<PublishRawEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
@@ -1340,7 +1352,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_get_public_from_private, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_active, nostr_keys_rename_label, nostr_config_dir, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_query, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_raw, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_events_list, nostr_events_query, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
