@@ -160,7 +160,7 @@ mod tests {
         let pass = Arc::new(vec![1u8; 32]);
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets, None)
+        let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets)
             .await
             .unwrap();
         let ss = SettingsStore::load_or_init(settings_path, pass).await.unwrap();

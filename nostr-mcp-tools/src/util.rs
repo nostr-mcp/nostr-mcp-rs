@@ -20,10 +20,6 @@ pub fn nostr_settings_path() -> PathBuf {
     nostr_config_root().join("settings.enc")
 }
 
-pub fn legacy_keys_json_path() -> PathBuf {
-    nostr_config_root().join("keys.json")
-}
-
 pub fn keystore_secret_path() -> PathBuf {
     nostr_config_root().join("keystore.secret")
 }

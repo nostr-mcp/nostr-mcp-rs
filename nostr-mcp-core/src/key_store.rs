@@ -7,7 +7,6 @@ use nostr::prelude::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -39,19 +38,10 @@ impl KeyStore {
         path: PathBuf,
         pass: Arc<Vec<u8>>,
         secrets: Arc<dyn SecretStore>,
-        legacy_json_path: Option<PathBuf>,
     ) -> Result<Self, CoreError> {
         ensure_parent_dir(&path)?;
         let data = if path.exists() {
             storage::decrypt_from_file::<KeyFile>(&path, &pass)?
-        } else if let Some(legacy_path) = legacy_json_path.filter(|p| p.exists()) {
-            let s = fs::read_to_string(&legacy_path)
-                .map_err(|e| CoreError::Io(format!("reading {}: {e}", legacy_path.display())))?;
-            let legacy: KeyFile = serde_json::from_str(&s)
-                .map_err(|e| CoreError::SerdeJson(format!("parse legacy keys: {e}")))?;
-            storage::encrypt_to_file(&path, &pass, &legacy)?;
-            let _ = fs::remove_file(&legacy_path);
-            legacy
         } else {
             KeyFile::default()
         };
@@ -362,7 +352,7 @@ mod tests {
         let pass = Arc::new(b"passphrase".to_vec());
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let store = KeyStore::load_or_init(path, pass, secrets, None)
+        let store = KeyStore::load_or_init(path, pass, secrets)
             .await
             .unwrap();
 

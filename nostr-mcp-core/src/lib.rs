@@ -14,6 +14,7 @@ pub mod groups;
 pub mod nip01;
 pub mod nip05;
 pub mod nip30;
+pub mod nip89;
 pub mod nip44;
 pub mod references;
 pub mod relay_info;
