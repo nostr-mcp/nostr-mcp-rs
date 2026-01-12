@@ -86,6 +86,15 @@ pub struct PostRepostArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEventsArgs {
+    pub event_ids: Option<Vec<String>>,
+    pub coordinates: Option<Vec<String>>,
+    pub reason: Option<String>,
+    pub pow: Option<u8>,
+    pub to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct PostAnonymousArgs {
     pub content: String,
     pub tags: Option<Vec<Vec<String>>>,
@@ -359,6 +368,68 @@ pub async fn post_repost(
     publish_event_builder(client, builder, args.to_relays).await
 }
 
+fn parse_event_id(id: &str) -> Result<EventId, CoreError> {
+    EventId::from_hex(id)
+        .map_err(|e| CoreError::invalid_input(format!("invalid event id {id}: {e}")))
+}
+
+fn parse_coordinate(coordinate: &str) -> Result<Coordinate, CoreError> {
+    Coordinate::parse(coordinate)
+        .map_err(|e| CoreError::invalid_input(format!("invalid coordinate {coordinate}: {e}")))
+}
+
+pub async fn delete_events(
+    client: &Client,
+    args: DeleteEventsArgs,
+) -> Result<SendResult, CoreError> {
+    let mut request = EventDeletionRequest::new();
+    let mut has_target = false;
+
+    if let Some(ids) = args.event_ids {
+        if ids.is_empty() {
+            return Err(CoreError::invalid_input("event_ids must not be empty"));
+        }
+        let mut parsed_ids = Vec::with_capacity(ids.len());
+        for id in ids {
+            parsed_ids.push(parse_event_id(&id)?);
+        }
+        request = request.ids(parsed_ids);
+        has_target = true;
+    }
+
+    if let Some(coords) = args.coordinates {
+        if coords.is_empty() {
+            return Err(CoreError::invalid_input("coordinates must not be empty"));
+        }
+        let mut parsed_coords = Vec::with_capacity(coords.len());
+        for coord in coords {
+            parsed_coords.push(parse_coordinate(&coord)?);
+        }
+        request = request.coordinates(parsed_coords);
+        has_target = true;
+    }
+
+    if !has_target {
+        return Err(CoreError::invalid_input(
+            "event_ids or coordinates are required",
+        ));
+    }
+
+    if let Some(reason) = args.reason {
+        if reason.trim().is_empty() {
+            return Err(CoreError::invalid_input("reason must not be empty"));
+        }
+        request = request.reason(reason);
+    }
+
+    let mut builder = EventBuilder::delete(request).allow_self_tagging();
+    if let Some(pow) = args.pow {
+        builder = builder.pow(pow);
+    }
+
+    publish_event_builder(client, builder, args.to_relays).await
+}
+
 pub async fn post_anonymous_note(
     client: &Client,
     args: PostAnonymousArgs,
@@ -549,9 +620,10 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 #[cfg(test)]
 mod tests {
     use super::{
-        create_text_event, group_chat_tags, long_form_tags, parse_signed_event, reaction_payload,
-        repost_builder, sign_unsigned_event, thread_tags, CreateTextArgs, PostGroupChatArgs,
-        PostLongFormArgs, PostReactionArgs, PostThreadArgs, SignEventArgs,
+        create_text_event, delete_events, group_chat_tags, long_form_tags, parse_signed_event,
+        reaction_payload, repost_builder, sign_unsigned_event, thread_tags, CreateTextArgs,
+        DeleteEventsArgs, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostThreadArgs,
+        SignEventArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -743,6 +815,53 @@ mod tests {
 
         let err = repost_builder(&target, Some("not a url".to_string()), None).unwrap_err();
         assert!(err.to_string().contains("invalid relay url"));
+    }
+
+    #[tokio::test]
+    async fn delete_events_rejects_missing_targets() {
+        let client = Client::new(Keys::generate());
+        let args = DeleteEventsArgs {
+            event_ids: None,
+            coordinates: None,
+            reason: None,
+            pow: None,
+            to_relays: None,
+        };
+
+        let err = delete_events(&client, args).await.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("event_ids or coordinates are required"));
+    }
+
+    #[tokio::test]
+    async fn delete_events_rejects_empty_reason() {
+        let client = Client::new(Keys::generate());
+        let args = DeleteEventsArgs {
+            event_ids: Some(vec!["0".repeat(64)]),
+            coordinates: None,
+            reason: Some("   ".to_string()),
+            pow: None,
+            to_relays: None,
+        };
+
+        let err = delete_events(&client, args).await.unwrap_err();
+        assert!(err.to_string().contains("reason must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn delete_events_rejects_invalid_id() {
+        let client = Client::new(Keys::generate());
+        let args = DeleteEventsArgs {
+            event_ids: Some(vec!["nope".to_string()]),
+            coordinates: None,
+            reason: None,
+            pow: None,
+            to_relays: None,
+        };
+
+        let err = delete_events(&client, args).await.unwrap_err();
+        assert!(err.to_string().contains("invalid event id"));
     }
 
     #[test]
