@@ -78,6 +78,14 @@ pub struct PostReactionArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct PostRepostArgs {
+    pub event_json: String,
+    pub relay_hint: Option<String>,
+    pub pow: Option<u8>,
+    pub to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct PostAnonymousArgs {
     pub content: String,
     pub tags: Option<Vec<Vec<String>>>,
@@ -321,6 +329,36 @@ pub async fn post_long_form(
     publish_event_builder(client, builder, args.to_relays).await
 }
 
+fn repost_builder(
+    event: &Event,
+    relay_hint: Option<String>,
+    pow: Option<u8>,
+) -> Result<EventBuilder, CoreError> {
+    let relay_url = match relay_hint {
+        Some(value) => Some(
+            RelayUrl::parse(&value)
+                .map_err(|e| CoreError::invalid_input(format!("invalid relay url: {e}")))?,
+        ),
+        None => None,
+    };
+
+    let mut builder = EventBuilder::repost(event, relay_url).allow_self_tagging();
+    if let Some(pow) = pow {
+        builder = builder.pow(pow);
+    }
+
+    Ok(builder)
+}
+
+pub async fn post_repost(
+    client: &Client,
+    args: PostRepostArgs,
+) -> Result<SendResult, CoreError> {
+    let target = parse_signed_event(&args.event_json)?;
+    let builder = repost_builder(&target, args.relay_hint, args.pow)?;
+    publish_event_builder(client, builder, args.to_relays).await
+}
+
 pub async fn post_anonymous_note(
     client: &Client,
     args: PostAnonymousArgs,
@@ -512,8 +550,8 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 mod tests {
     use super::{
         create_text_event, group_chat_tags, long_form_tags, parse_signed_event, reaction_payload,
-        sign_unsigned_event, thread_tags, CreateTextArgs, PostGroupChatArgs, PostLongFormArgs,
-        PostReactionArgs, PostThreadArgs, SignEventArgs,
+        repost_builder, sign_unsigned_event, thread_tags, CreateTextArgs, PostGroupChatArgs,
+        PostLongFormArgs, PostReactionArgs, PostThreadArgs, SignEventArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -645,6 +683,66 @@ mod tests {
         let event = Event::from_json(&result.event_json).unwrap();
         assert_eq!(event.pubkey, keys.public_key());
         assert_eq!(result.event_id, event.id.to_string());
+    }
+
+    #[test]
+    fn repost_builder_uses_kind_6_for_text_note() {
+        let target_keys = Keys::generate();
+        let target = EventBuilder::text_note("hello")
+            .sign_with_keys(&target_keys)
+            .unwrap();
+        let reposter_keys = Keys::generate();
+
+        let builder = repost_builder(&target, None, None).unwrap();
+        let unsigned = builder.build(reposter_keys.public_key());
+
+        assert_eq!(unsigned.kind, Kind::Repost);
+    }
+
+    #[test]
+    fn repost_builder_uses_generic_for_non_text() {
+        let target_keys = Keys::generate();
+        let target = EventBuilder::new(Kind::from(30023), "long")
+            .sign_with_keys(&target_keys)
+            .unwrap();
+        let reposter_keys = Keys::generate();
+
+        let builder = repost_builder(&target, None, None).unwrap();
+        let unsigned = builder.build(reposter_keys.public_key());
+
+        assert_eq!(unsigned.kind, Kind::GenericRepost);
+        assert!(unsigned.tags.iter().any(|tag| {
+            let values = tag.as_slice();
+            values.len() == 2 && values[0] == "k" && values[1] == "30023"
+        }));
+    }
+
+    #[test]
+    fn repost_builder_preserves_self_tag() {
+        let keys = Keys::generate();
+        let target = EventBuilder::text_note("hello")
+            .sign_with_keys(&keys)
+            .unwrap();
+
+        let builder = repost_builder(&target, None, None).unwrap();
+        let unsigned = builder.build(keys.public_key());
+        let pubkey_hex = keys.public_key().to_hex();
+
+        assert!(unsigned.tags.iter().any(|tag| {
+            let values = tag.as_slice();
+            values.len() == 2 && values[0] == "p" && values[1] == pubkey_hex
+        }));
+    }
+
+    #[test]
+    fn repost_builder_rejects_bad_relay() {
+        let target_keys = Keys::generate();
+        let target = EventBuilder::text_note("hello")
+            .sign_with_keys(&target_keys)
+            .unwrap();
+
+        let err = repost_builder(&target, Some("not a url".to_string()), None).unwrap_err();
+        assert!(err.to_string().contains("invalid relay url"));
     }
 
     #[test]
