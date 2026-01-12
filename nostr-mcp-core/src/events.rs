@@ -36,6 +36,23 @@ impl QueryEventsArgs {
     }
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct LongFormListArgs {
+    pub author_npub: Option<String>,
+    pub identifier: Option<String>,
+    pub hashtags: Option<Vec<String>>,
+    pub limit: Option<u64>,
+    pub since: Option<u64>,
+    pub until: Option<u64>,
+    pub timeout_secs: Option<u64>,
+}
+
+impl LongFormListArgs {
+    pub fn timeout(&self) -> u64 {
+        self.timeout_secs.unwrap_or(10)
+    }
+}
+
 pub async fn subscription_targets_my_notes(
     pk: PublicKey,
     since: Option<Timestamp>,
@@ -116,6 +133,68 @@ pub async fn query_events(
     Ok(out)
 }
 
+pub async fn list_long_form_events(
+    client: &Client,
+    args: LongFormListArgs,
+) -> Result<Vec<Event>, CoreError> {
+    let filter = long_form_filter(&args)?;
+    list_events(client, filter, args.timeout()).await
+}
+
+pub fn long_form_filter(args: &LongFormListArgs) -> Result<Filter, CoreError> {
+    nip01::validate_time_bounds(args.since, args.until)?;
+    nip01::validate_limit(args.limit)?;
+
+    let mut filter = Filter::new().kind(Kind::from(30023));
+    let mut has_constraint = false;
+
+    if let Some(author_npub) = &args.author_npub {
+        let pk = PublicKey::from_bech32(author_npub)
+            .map_err(|e| CoreError::invalid_input(format!("invalid author npub: {e}")))?;
+        filter = filter.author(pk);
+        has_constraint = true;
+    }
+
+    if let Some(identifier) = &args.identifier {
+        let value = ensure_non_empty("identifier", identifier)?;
+        filter = filter.identifier(value);
+        has_constraint = true;
+    }
+
+    if let Some(hashtags) = &args.hashtags {
+        if hashtags.is_empty() {
+            return Err(CoreError::invalid_input("hashtags must not be empty"));
+        }
+
+        let mut cleaned = Vec::with_capacity(hashtags.len());
+        for hashtag in hashtags {
+            cleaned.push(ensure_non_empty("hashtag", hashtag)?);
+        }
+        filter = filter.hashtags(cleaned);
+        has_constraint = true;
+    }
+
+    if let Some(since) = args.since {
+        filter = filter.since(Timestamp::from(since));
+    }
+
+    if let Some(until) = args.until {
+        filter = filter.until(Timestamp::from(until));
+    }
+
+    if let Some(limit) = args.limit {
+        filter = filter.limit(limit as usize);
+    }
+
+    if !has_constraint {
+        return Err(CoreError::invalid_input(
+            "at least one of author_npub, identifier, or hashtags is required",
+        ));
+    }
+
+    Ok(filter)
+}
+
 fn parse_filters(args: &QueryEventsArgs) -> Result<Vec<Filter>, CoreError> {
     if args.filters.is_empty() {
         return Err(CoreError::invalid_input("filters must not be empty"));
@@ -136,6 +215,16 @@ fn parse_filters(args: &QueryEventsArgs) -> Result<Vec<Filter>, CoreError> {
     Ok(filters)
 }
 
+fn ensure_non_empty(label: &str, value: &str) -> Result<String, CoreError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::invalid_input(format!(
+            "{label} must not be empty"
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
 fn validate_filter_bounds(filter: &Filter) -> Result<(), CoreError> {
     let since = filter.since.map(|t| t.as_secs());
     let until = filter.until.map(|t| t.as_secs());
@@ -148,8 +237,9 @@ fn validate_filter_bounds(filter: &Filter) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_filters, subscription_targets_mentions_me, subscription_targets_my_metadata,
-        subscription_targets_my_notes, QueryEventsArgs,
+        long_form_filter, parse_filters, subscription_targets_mentions_me,
+        subscription_targets_my_metadata, subscription_targets_my_notes, LongFormListArgs,
+        QueryEventsArgs,
     };
     use nostr_sdk::prelude::*;
     use serde_json::json;
@@ -222,5 +312,92 @@ mod tests {
         };
         let filters = parse_filters(&args).unwrap();
         assert_eq!(filters[0].limit, Some(5));
+    }
+
+    #[test]
+    fn long_form_filter_requires_constraint() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: None,
+            hashtags: None,
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = long_form_filter(&args).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("at least one of author_npub, identifier, or hashtags is required"));
+    }
+
+    #[test]
+    fn long_form_filter_includes_author_kind_and_tags() {
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+
+        let args = LongFormListArgs {
+            author_npub: Some(npub),
+            identifier: Some("post-1".to_string()),
+            hashtags: Some(vec!["nostr".to_string()]),
+            limit: Some(5),
+            since: Some(10),
+            until: Some(20),
+            timeout_secs: None,
+        };
+
+        let filter = long_form_filter(&args).unwrap();
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::from(30023)));
+        assert_eq!(filter.limit, Some(5));
+        assert_eq!(filter.since, Some(Timestamp::from(10)));
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+
+        let hashtag_tag = SingleLetterTag::lowercase(Alphabet::T);
+        let identifier_tag = SingleLetterTag::lowercase(Alphabet::D);
+        assert!(filter
+            .generic_tags
+            .get(&hashtag_tag)
+            .unwrap()
+            .contains("nostr"));
+        assert!(filter
+            .generic_tags
+            .get(&identifier_tag)
+            .unwrap()
+            .contains("post-1"));
+    }
+
+    #[test]
+    fn long_form_filter_rejects_empty_identifier() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some("   ".to_string()),
+            hashtags: Some(vec!["nostr".to_string()]),
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = long_form_filter(&args).unwrap_err();
+        assert!(err.to_string().contains("identifier must not be empty"));
+    }
+
+    #[test]
+    fn long_form_filter_rejects_empty_hashtag() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some("post-1".to_string()),
+            hashtags: Some(vec![" ".to_string()]),
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = long_form_filter(&args).unwrap_err();
+        assert!(err.to_string().contains("hashtag must not be empty"));
     }
 }
