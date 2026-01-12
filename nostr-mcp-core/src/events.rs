@@ -37,6 +37,23 @@ impl QueryEventsArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct SearchEventsArgs {
+    pub query: String,
+    pub kinds: Option<Vec<u16>>,
+    pub author_npub: Option<String>,
+    pub limit: Option<u64>,
+    pub since: Option<u64>,
+    pub until: Option<u64>,
+    pub timeout_secs: Option<u64>,
+}
+
+impl SearchEventsArgs {
+    pub fn timeout(&self) -> u64 {
+        self.timeout_secs.unwrap_or(10)
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct LongFormListArgs {
     pub author_npub: Option<String>,
     pub identifier: Option<String>,
@@ -131,6 +148,54 @@ pub async fn query_events(
     }
 
     Ok(out)
+}
+
+pub async fn search_events(
+    client: &Client,
+    args: SearchEventsArgs,
+) -> Result<Vec<Event>, CoreError> {
+    let filter = search_filter(&args)?;
+    list_events(client, filter, args.timeout()).await
+}
+
+pub fn search_filter(args: &SearchEventsArgs) -> Result<Filter, CoreError> {
+    nip01::validate_time_bounds(args.since, args.until)?;
+    nip01::validate_limit(args.limit)?;
+
+    let query = args.query.trim();
+    if query.is_empty() {
+        return Err(CoreError::invalid_input("query must not be empty"));
+    }
+
+    let mut filter = Filter::new().search(query.to_string());
+
+    if let Some(kinds) = &args.kinds {
+        if kinds.is_empty() {
+            return Err(CoreError::invalid_input("kinds must not be empty"));
+        }
+        let parsed_kinds = kinds.iter().map(|k| Kind::from(*k)).collect::<Vec<_>>();
+        filter = filter.kinds(parsed_kinds);
+    }
+
+    if let Some(author_npub) = &args.author_npub {
+        let pk = PublicKey::from_bech32(author_npub)
+            .map_err(|e| CoreError::invalid_input(format!("invalid author npub: {e}")))?;
+        filter = filter.author(pk);
+    }
+
+    if let Some(since) = args.since {
+        filter = filter.since(Timestamp::from(since));
+    }
+
+    if let Some(until) = args.until {
+        filter = filter.until(Timestamp::from(until));
+    }
+
+    if let Some(limit) = args.limit {
+        filter = filter.limit(limit as usize);
+    }
+
+    Ok(filter)
 }
 
 pub async fn list_long_form_events(
@@ -237,9 +302,9 @@ fn validate_filter_bounds(filter: &Filter) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        long_form_filter, parse_filters, subscription_targets_mentions_me,
+        long_form_filter, parse_filters, search_filter, subscription_targets_mentions_me,
         subscription_targets_my_metadata, subscription_targets_my_notes, LongFormListArgs,
-        QueryEventsArgs,
+        QueryEventsArgs, SearchEventsArgs,
     };
     use nostr_sdk::prelude::*;
     use serde_json::json;
@@ -399,5 +464,37 @@ mod tests {
 
         let err = long_form_filter(&args).unwrap_err();
         assert!(err.to_string().contains("hashtag must not be empty"));
+    }
+
+    #[test]
+    fn search_filter_rejects_empty_query() {
+        let args = SearchEventsArgs {
+            query: "   ".to_string(),
+            kinds: None,
+            author_npub: None,
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = search_filter(&args).unwrap_err();
+        assert!(err.to_string().contains("query must not be empty"));
+    }
+
+    #[test]
+    fn search_filter_rejects_empty_kinds() {
+        let args = SearchEventsArgs {
+            query: "nostr".to_string(),
+            kinds: Some(vec![]),
+            author_npub: None,
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = search_filter(&args).unwrap_err();
+        assert!(err.to_string().contains("kinds must not be empty"));
     }
 }

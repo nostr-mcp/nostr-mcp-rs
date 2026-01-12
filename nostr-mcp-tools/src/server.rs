@@ -2,9 +2,10 @@ use crate::util;
 use nostr_mcp_core::client::{ensure_client, reset_cached_client};
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::events::{
-    list_events, list_long_form_events, query_events, subscription_targets_mentions_me,
-    subscription_targets_my_metadata, subscription_targets_my_notes, EventsListArgs,
-    LongFormListArgs, QueryEventsArgs,
+    list_events, list_long_form_events, query_events, search_events,
+    subscription_targets_mentions_me, subscription_targets_my_metadata,
+    subscription_targets_my_notes, EventsListArgs, LongFormListArgs, QueryEventsArgs,
+    SearchEventsArgs,
 };
 use nostr_mcp_core::follows::{
     fetch_follows, publish_follows, AddFollowArgs, PublishFollowsResult, RemoveFollowArgs,
@@ -646,6 +647,38 @@ impl NostrMcpServer {
             .await
             .map_err(core_error)?;
         let events = query_events(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let items: Vec<serde_json::Value> = events
+            .into_iter()
+            .map(|e| {
+                serde_json::json!({
+                    "id": e.id.to_string(),
+                    "kind": e.kind.as_u16(),
+                    "pubkey": e.pubkey.to_string(),
+                    "created_at": e.created_at.as_secs(),
+                    "content": e.content,
+                    "tags": e.tags.to_vec(),
+                })
+            })
+            .collect();
+        let content = Content::json(serde_json::json!({ "items": items, "count": items.len() }))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Search events using NIP-50 search query. Requires query. Optional: kinds (array), author_npub, limit, since (unix timestamp), until (unix timestamp), timeout_secs (default: 10)."
+    )]
+    pub async fn nostr_events_search(
+        &self,
+        Parameters(args): Parameters<SearchEventsArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss)
+            .await
+            .map_err(core_error)?;
+        let events = search_events(&ac.client, args)
             .await
             .map_err(core_error)?;
         let items: Vec<serde_json::Value> = events
@@ -1555,7 +1588,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
@@ -1614,6 +1647,7 @@ mod tests {
         assert!(server.tool_router.has_route("nostr_events_list_long_form"));
         assert!(server.tool_router.has_route("nostr_events_parse_refs"));
         assert!(server.tool_router.has_route("nostr_events_query"));
+        assert!(server.tool_router.has_route("nostr_events_search"));
         assert!(server.tool_router.has_route("nostr_events_post_long_form"));
         assert!(server.tool_router.has_route("nostr_events_create_text"));
         assert!(server.tool_router.has_route("nostr_events_sign"));
