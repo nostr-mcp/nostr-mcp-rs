@@ -139,9 +139,7 @@ pub fn verify_key(key: &str) -> VerifyResult {
     }
 }
 
-pub fn derive_public_from_private(
-    private_key: &str,
-) -> Result<DerivePublicResult, CoreError> {
+pub fn derive_public(private_key: &str) -> Result<DerivePublicResult, CoreError> {
     let private_key = private_key.trim();
 
     let keys = if private_key.starts_with("nsec1") {
@@ -166,7 +164,7 @@ pub fn derive_public_from_private(
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_public_from_private, verify_key, KeyType};
+    use super::{derive_public, verify_key, KeyType};
     use nostr::prelude::*;
 
     #[test]
@@ -208,19 +206,19 @@ mod tests {
     }
 
     #[test]
-    fn derive_public_from_private_accepts_nsec_and_hex() {
+    fn derive_public_accepts_nsec_and_hex() {
         let keys = Keys::generate();
         let nsec = keys.secret_key().to_bech32().unwrap();
         let hex = keys.secret_key().to_secret_hex();
 
-        let derived_from_nsec = derive_public_from_private(&nsec).unwrap();
+        let derived_from_nsec = derive_public(&nsec).unwrap();
         assert_eq!(derived_from_nsec.public_key_hex, keys.public_key().to_hex());
         assert_eq!(
             derived_from_nsec.public_key_npub,
             keys.public_key().to_bech32().unwrap()
         );
 
-        let derived_from_hex = derive_public_from_private(&hex).unwrap();
+        let derived_from_hex = derive_public(&hex).unwrap();
         assert_eq!(derived_from_hex.public_key_hex, keys.public_key().to_hex());
         assert_eq!(
             derived_from_hex.public_key_npub,
@@ -229,8 +227,8 @@ mod tests {
     }
 
     #[test]
-    fn derive_public_from_private_rejects_invalid_format() {
-        let err = derive_public_from_private("not-a-key").unwrap_err();
+    fn derive_public_rejects_invalid_format() {
+        let err = derive_public("not-a-key").unwrap_err();
         assert_eq!(
             err.to_string(),
             "invalid input: Invalid private key format. Expected nsec1... or 64-character hex"

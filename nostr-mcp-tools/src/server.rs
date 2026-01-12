@@ -19,7 +19,7 @@ use nostr_mcp_core::key_store::{
     EmptyArgs, ExportArgs, GenerateArgs, ImportArgs, KeyStore, RemoveArgs, RenameLabelArgs,
     SetActiveArgs,
 };
-use nostr_mcp_core::keys::{derive_public_from_private, verify_key, DerivePublicArgs, VerifyArgs};
+use nostr_mcp_core::keys::{derive_public, verify_key, DerivePublicArgs, VerifyArgs};
 use nostr_mcp_core::metadata::{
     args_to_profile, fetch_metadata, publish_metadata, FetchMetadataArgs, MetadataResult,
     SetMetadataArgs,
@@ -29,8 +29,8 @@ use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
 use nostr_mcp_core::publish::{
-    post_group_chat, post_reaction, post_text_note, post_thread, publish_raw_event,
-    PostGroupChatArgs, PostReactionArgs, PostTextArgs, PostThreadArgs, PublishRawEventArgs,
+    post_group_chat, post_reaction, post_text_note, post_thread, publish_signed_event,
+    PostGroupChatArgs, PostReactionArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
 };
 use nostr_mcp_core::relays::{
     connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
@@ -307,7 +307,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DerivePublicArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let result = derive_public_from_private(&args.private_key)
+        let result = derive_public(&args.private_key)
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -682,14 +682,14 @@ impl NostrMcpServer {
     )]
     pub async fn nostr_events_publish_signed(
         &self,
-        Parameters(args): Parameters<PublishRawEventArgs>,
+        Parameters(args): Parameters<PublishSignedEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let ks = Self::keystore().await?;
         let ss = Self::settings_store().await?;
         let ac = ensure_client(ks, ss)
             .await
             .map_err(core_error)?;
-        let result = publish_raw_event(&ac.client, args)
+        let result = publish_signed_event(&ac.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;

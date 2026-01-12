@@ -51,7 +51,7 @@ pub struct PostReactionArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct PublishRawEventArgs {
+pub struct PublishSignedEventArgs {
     pub event_json: String,
     pub to_relays: Option<Vec<String>>,
 }
@@ -98,9 +98,9 @@ pub async fn publish_event_builder(
     })
 }
 
-pub async fn publish_raw_event(
+pub async fn publish_signed_event(
     client: &Client,
-    args: PublishRawEventArgs,
+    args: PublishSignedEventArgs,
 ) -> Result<SendResult, CoreError> {
     let event = parse_signed_event(&args.event_json)?;
     let out = if let Some(urls) = args.to_relays {
