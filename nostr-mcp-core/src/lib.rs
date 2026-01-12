@@ -13,6 +13,7 @@ pub mod polls;
 pub mod groups;
 pub mod nip01;
 pub mod references;
+pub mod relay_info;
 pub mod keys;
 pub mod key_store;
 pub mod keystore;

@@ -26,6 +26,7 @@ nostr = { version = "0.44.1" }
 nostr-relay-pool = { version = "0.44.0" }
 nostr-sdk = { version = "0.44.1" }
 rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rmcp = { version = "0.8.1" }
 schemars = "1.0"
 serde = { version = "1", features = ["derive"] }

@@ -22,6 +22,7 @@ nostr = { workspace = true }
 nostr-relay-pool = { workspace = true }
 nostr-sdk = { workspace = true }
 rand = { workspace = true }
+reqwest = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
