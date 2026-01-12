@@ -30,6 +30,7 @@ use nostr_mcp_core::references::{parse_text_references, ParseReferencesArgs};
 use nostr_mcp_core::relay_info::{fetch_relay_info, RelayInfoArgs};
 use nostr_mcp_core::nip01;
 use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05, Nip05ResolveArgs, Nip05VerifyArgs};
+use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44, Nip44DecryptArgs, Nip44EncryptArgs};
 use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
@@ -521,6 +522,28 @@ impl NostrMcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let result = verify_nip05(args)
             .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(description = "Encrypt plaintext using NIP-44.")]
+    pub async fn nostr_nip44_encrypt(
+        &self,
+        Parameters(args): Parameters<Nip44EncryptArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let result = encrypt_nip44(args)
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(description = "Decrypt ciphertext using NIP-44.")]
+    pub async fn nostr_nip44_decrypt(
+        &self,
+        Parameters(args): Parameters<Nip44DecryptArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let result = decrypt_nip44(args)
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1617,7 +1640,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
@@ -1674,6 +1697,8 @@ mod tests {
         assert!(server.tool_router.has_route("nostr_relays_get_info"));
         assert!(server.tool_router.has_route("nostr_nip05_resolve"));
         assert!(server.tool_router.has_route("nostr_nip05_verify"));
+        assert!(server.tool_router.has_route("nostr_nip44_encrypt"));
+        assert!(server.tool_router.has_route("nostr_nip44_decrypt"));
         assert!(server.tool_router.has_route("nostr_events_list"));
         assert!(server.tool_router.has_route("nostr_events_list_long_form"));
         assert!(server.tool_router.has_route("nostr_events_parse_refs"));
