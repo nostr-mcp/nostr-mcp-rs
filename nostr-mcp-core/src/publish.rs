@@ -29,6 +29,19 @@ pub struct PostThreadArgs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct PostLongFormArgs {
+    pub content: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub image: Option<String>,
+    pub published_at: Option<u64>,
+    pub identifier: Option<String>,
+    pub hashtags: Option<Vec<String>>,
+    pub pow: Option<u8>,
+    pub to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct PostGroupChatArgs {
     pub content: String,
     pub group_id: String,
@@ -182,6 +195,91 @@ pub async fn post_thread(
     publish_event_builder(client, builder, args.to_relays).await
 }
 
+pub async fn post_long_form(
+    client: &Client,
+    args: PostLongFormArgs,
+) -> Result<SendResult, CoreError> {
+    let tags = long_form_tags(&args)?;
+    let mut builder = EventBuilder::new(Kind::from(30023), args.content).tags(tags);
+
+    if let Some(pow) = args.pow {
+        builder = builder.pow(pow);
+    }
+
+    publish_event_builder(client, builder, args.to_relays).await
+}
+
+fn long_form_tags(args: &PostLongFormArgs) -> Result<Vec<Tag>, CoreError> {
+    let mut tags = Vec::new();
+
+    if let Some(title) = &args.title {
+        tags.push(tag_pair(
+            "title",
+            ensure_tag_value("title", title)?,
+            "title",
+        )?);
+    }
+
+    if let Some(summary) = &args.summary {
+        tags.push(tag_pair(
+            "summary",
+            ensure_tag_value("summary", summary)?,
+            "summary",
+        )?);
+    }
+
+    if let Some(image) = &args.image {
+        tags.push(tag_pair(
+            "image",
+            ensure_tag_value("image", image)?,
+            "image",
+        )?);
+    }
+
+    if let Some(published_at) = args.published_at {
+        tags.push(tag_pair(
+            "published_at",
+            published_at.to_string(),
+            "published_at",
+        )?);
+    }
+
+    if let Some(identifier) = &args.identifier {
+        tags.push(tag_pair(
+            "d",
+            ensure_tag_value("identifier", identifier)?,
+            "identifier",
+        )?);
+    }
+
+    if let Some(hashtags) = &args.hashtags {
+        for hashtag in hashtags {
+            tags.push(tag_pair(
+                "t",
+                ensure_tag_value("hashtag", hashtag)?,
+                "hashtag",
+            )?);
+        }
+    }
+
+    Ok(tags)
+}
+
+fn tag_pair(name: &str, value: String, label: &str) -> Result<Tag, CoreError> {
+    Tag::parse(&[name.to_string(), value])
+        .map_err(|e| CoreError::Nostr(format!("{label} tag: {e}")))
+}
+
+fn ensure_tag_value(label: &str, value: &str) -> Result<String, CoreError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::invalid_input(format!(
+            "{label} must not be empty"
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
 fn group_chat_tags(args: &PostGroupChatArgs) -> Result<Vec<Tag>, CoreError> {
     let mut tags = Vec::new();
 
@@ -273,8 +371,8 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 #[cfg(test)]
 mod tests {
     use super::{
-        group_chat_tags, parse_signed_event, reaction_payload, thread_tags, PostGroupChatArgs,
-        PostReactionArgs, PostThreadArgs,
+        group_chat_tags, long_form_tags, parse_signed_event, reaction_payload, thread_tags,
+        PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostThreadArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -310,6 +408,52 @@ mod tests {
         let tags = group_chat_tags(&args).unwrap();
         let as_vec: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
         assert!(as_vec.contains(&vec!["h".to_string(), "group".to_string()]));
+    }
+
+    #[test]
+    fn long_form_tags_include_fields() {
+        let args = PostLongFormArgs {
+            content: "body".to_string(),
+            title: Some("Title".to_string()),
+            summary: Some("Summary".to_string()),
+            image: Some("https://example.com/img.png".to_string()),
+            published_at: Some(123),
+            identifier: Some("article-1".to_string()),
+            hashtags: Some(vec!["news".to_string(), "nostr".to_string()]),
+            pow: None,
+            to_relays: None,
+        };
+
+        let tags = long_form_tags(&args).unwrap();
+        let as_vec: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
+        assert!(as_vec.contains(&vec!["title".to_string(), "Title".to_string()]));
+        assert!(as_vec.contains(&vec!["summary".to_string(), "Summary".to_string()]));
+        assert!(as_vec.contains(&vec![
+            "image".to_string(),
+            "https://example.com/img.png".to_string()
+        ]));
+        assert!(as_vec.contains(&vec!["published_at".to_string(), "123".to_string()]));
+        assert!(as_vec.contains(&vec!["d".to_string(), "article-1".to_string()]));
+        assert!(as_vec.contains(&vec!["t".to_string(), "news".to_string()]));
+        assert!(as_vec.contains(&vec!["t".to_string(), "nostr".to_string()]));
+    }
+
+    #[test]
+    fn long_form_tags_rejects_empty_identifier() {
+        let args = PostLongFormArgs {
+            content: "body".to_string(),
+            title: None,
+            summary: None,
+            image: None,
+            published_at: None,
+            identifier: Some("   ".to_string()),
+            hashtags: None,
+            pow: None,
+            to_relays: None,
+        };
+
+        let err = long_form_tags(&args).unwrap_err();
+        assert!(err.to_string().contains("identifier must not be empty"));
     }
 
     #[test]
