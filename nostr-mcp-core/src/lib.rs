@@ -12,6 +12,7 @@ pub mod replies;
 pub mod polls;
 pub mod groups;
 pub mod nip01;
+pub mod nip05;
 pub mod references;
 pub mod relay_info;
 pub mod keys;
