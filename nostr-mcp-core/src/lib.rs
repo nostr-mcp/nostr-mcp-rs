@@ -13,6 +13,7 @@ pub mod polls;
 pub mod groups;
 pub mod nip01;
 pub mod nip05;
+pub mod nip19;
 pub mod nip30;
 pub mod nip58;
 pub mod nip89;
