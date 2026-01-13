@@ -33,6 +33,10 @@ use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05, Nip05ResolveArgs, Nip05
 use nostr_mcp_core::nip30::{parse_nip30_emojis, Nip30ParseArgs};
 use nostr_mcp_core::nip89::{post_handler_info, post_recommendation, Nip89HandlerInfoArgs, Nip89RecommendArgs};
 use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44, Nip44DecryptArgs, Nip44EncryptArgs};
+use nostr_mcp_core::nip58::{
+    post_badge_award, post_badge_definition, post_profile_badges, Nip58BadgeAwardArgs,
+    Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
+};
 use nostr_mcp_core::polls::{
     create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
@@ -582,6 +586,63 @@ impl NostrMcpServer {
             .await
             .map_err(core_error)?;
         let result = post_handler_info(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Publish a NIP-58 badge definition (kind 30009). Optional: pow (u8), to_relays (urls)."
+    )]
+    pub async fn nostr_badges_define(
+        &self,
+        Parameters(args): Parameters<Nip58BadgeDefinitionArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss.clone())
+            .await
+            .map_err(core_error)?;
+        let result = post_badge_definition(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Publish a NIP-58 badge award (kind 8). Optional: pow (u8), to_relays (urls)."
+    )]
+    pub async fn nostr_badges_award(
+        &self,
+        Parameters(args): Parameters<Nip58BadgeAwardArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss.clone())
+            .await
+            .map_err(core_error)?;
+        let result = post_badge_award(&ac.client, args)
+            .await
+            .map_err(core_error)?;
+        let content = Content::json(serde_json::json!(result))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(
+        description = "Publish a NIP-58 profile badges event (kind 30008). Optional: pow (u8), to_relays (urls)."
+    )]
+    pub async fn nostr_badges_set_profile(
+        &self,
+        Parameters(args): Parameters<Nip58ProfileBadgesArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ks = Self::keystore().await?;
+        let ss = Self::settings_store().await?;
+        let ac = ensure_client(ks, ss.clone())
+            .await
+            .map_err(core_error)?;
+        let result = post_profile_badges(&ac.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -1689,7 +1750,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_handlers_recommend, nostr_handlers_register, nostr_events_parse_emojis, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_handlers_recommend, nostr_handlers_register, nostr_badges_define, nostr_badges_award, nostr_badges_set_profile, nostr_events_parse_emojis, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
@@ -1737,32 +1798,38 @@ pub async fn start_stdio_server() -> anyhow::Result<()> {
 mod tests {
     use super::NostrMcpServer;
     use rmcp::ServerHandler;
+    use serde::Deserialize;
+    use std::path::PathBuf;
+
+    #[derive(Deserialize)]
+    struct ToolRegistry {
+        tools: Vec<ToolEntry>,
+    }
+
+    #[derive(Deserialize)]
+    struct ToolEntry {
+        name: String,
+        status: String,
+    }
+
+    fn load_tool_registry() -> ToolRegistry {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../spec/registry/tools.json");
+        let data = std::fs::read_to_string(&path).expect("read tools registry");
+        serde_json::from_str(&data).expect("parse tools registry")
+    }
 
     #[test]
     fn tool_router_registers_core_tools() {
         let server = NostrMcpServer::new();
-        assert!(server.tool_router.has_route("nostr_keys_generate"));
-        assert!(server.tool_router.has_route("nostr_relays_set"));
-        assert!(server.tool_router.has_route("nostr_relays_get_info"));
-        assert!(server.tool_router.has_route("nostr_nip05_resolve"));
-        assert!(server.tool_router.has_route("nostr_nip05_verify"));
-        assert!(server.tool_router.has_route("nostr_nip44_encrypt"));
-        assert!(server.tool_router.has_route("nostr_nip44_decrypt"));
-        assert!(server.tool_router.has_route("nostr_handlers_recommend"));
-        assert!(server.tool_router.has_route("nostr_handlers_register"));
-        assert!(server.tool_router.has_route("nostr_events_parse_emojis"));
-        assert!(server.tool_router.has_route("nostr_events_list"));
-        assert!(server.tool_router.has_route("nostr_events_list_long_form"));
-        assert!(server.tool_router.has_route("nostr_events_parse_refs"));
-        assert!(server.tool_router.has_route("nostr_events_query"));
-        assert!(server.tool_router.has_route("nostr_events_search"));
-        assert!(server.tool_router.has_route("nostr_events_post_long_form"));
-        assert!(server.tool_router.has_route("nostr_events_create_text"));
-        assert!(server.tool_router.has_route("nostr_events_sign"));
-        assert!(server.tool_router.has_route("nostr_events_post_anonymous"));
-        assert!(server.tool_router.has_route("nostr_events_repost"));
-        assert!(server.tool_router.has_route("nostr_events_delete"));
-        assert!(server.tool_router.has_route("nostr_profiles_get"));
+        let registry = load_tool_registry();
+        for tool in registry.tools.into_iter().filter(|tool| tool.status == "stable") {
+            assert!(
+                server.tool_router.has_route(&tool.name),
+                "missing tool route: {}",
+                tool.name
+            );
+        }
     }
 
     #[test]
