@@ -266,7 +266,8 @@ mod tests {
     }
 
     fn load_tool_registry() -> ToolRegistry {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/registry/tools.json");
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../spec/registry/tools.json");
         let data = std::fs::read_to_string(&path).expect("read tools registry");
         serde_json::from_str(&data).expect("parse tools registry")
     }

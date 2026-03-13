@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "nostr-mcp-core",
-    "nostr-mcp-tools",
+    "crates/nostr-mcp-core",
+    "crates/nostr-mcp-tools",
 ]
 resolver = "2"
 
