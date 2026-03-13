@@ -1,7 +1,7 @@
 use crate::error::CoreError;
+use crate::fs::ensure_parent_dir;
 use crate::secrets::SecretStore;
 use crate::storage;
-use crate::fs::ensure_parent_dir;
 use chrono::Utc;
 use nostr::prelude::*;
 use schemars::JsonSchema;
@@ -72,20 +72,24 @@ impl KeyStore {
     }
 
     pub async fn set_active(&self, label: String) -> Result<KeyEntry, CoreError> {
+        let label = normalize_label(label)?;
         let mut data = self.inner.write().await;
         if !data.keys.contains_key(&label) {
             return Err(CoreError::invalid_input("unknown key label"));
         }
         data.active = Some(label.clone());
-        let entry = data.keys.get(&label).cloned().ok_or_else(|| {
-            CoreError::invalid_input("unknown key label")
-        })?;
+        let entry = data
+            .keys
+            .get(&label)
+            .cloned()
+            .ok_or_else(|| CoreError::invalid_input("unknown key label"))?;
         drop(data);
         self.persist().await?;
         Ok(entry)
     }
 
     pub async fn remove(&self, label: String) -> Result<Option<KeyEntry>, CoreError> {
+        let label = normalize_label(label)?;
         let mut data = self.inner.write().await;
         let removed = data.keys.remove(&label);
         if data.active.as_deref() == Some(&label) {
@@ -104,13 +108,22 @@ impl KeyStore {
         make_active: bool,
         persist_secret: bool,
     ) -> Result<KeyEntry, CoreError> {
-        let keys = if secret.starts_with("nsec1") || secret.starts_with("npub1") {
-            Keys::parse(&secret).map_err(|e| CoreError::invalid_input(e.to_string()))?
+        let label = normalize_label(label)?;
+        let secret = secret.trim();
+
+        if secret.starts_with("nsec1") {
+            let keys = Keys::parse(secret).map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            self.insert_keys(label, keys, make_active, persist_secret)
+                .await
+        } else if secret.starts_with("npub1") {
+            let public_key = PublicKey::from_bech32(secret)
+                .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            self.insert_public_key(label, public_key, make_active).await
         } else {
-            return Err(CoreError::invalid_input("unsupported key material"));
-        };
-        self.insert_keys(label, keys, make_active, persist_secret)
-            .await
+            Err(CoreError::invalid_input(
+                "unsupported key material; expected nsec1... or npub1...",
+            ))
+        }
     }
 
     pub async fn generate(
@@ -119,6 +132,7 @@ impl KeyStore {
         make_active: bool,
         persist_secret: bool,
     ) -> Result<KeyEntry, CoreError> {
+        let label = normalize_label(label)?;
         let keys = Keys::generate();
         self.insert_keys(label, keys, make_active, persist_secret)
             .await
@@ -131,6 +145,7 @@ impl KeyStore {
         make_active: bool,
         persist_secret: bool,
     ) -> Result<KeyEntry, CoreError> {
+        ensure_label_available(&self.inner, &label).await?;
         let public_key = keys
             .public_key()
             .to_bech32()
@@ -158,7 +173,35 @@ impl KeyStore {
         Ok(entry)
     }
 
+    async fn insert_public_key(
+        &self,
+        label: String,
+        public_key: PublicKey,
+        make_active: bool,
+    ) -> Result<KeyEntry, CoreError> {
+        ensure_label_available(&self.inner, &label).await?;
+        let public_key = public_key
+            .to_bech32()
+            .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+        let entry = KeyEntry {
+            label: label.clone(),
+            public_key,
+            created_at: Utc::now().timestamp(),
+        };
+
+        let mut data = self.inner.write().await;
+        data.keys.insert(label.clone(), entry.clone());
+        if make_active {
+            data.active = Some(label);
+        }
+        drop(data);
+        self.persist().await?;
+        Ok(entry)
+    }
+
     pub async fn rename_label(&self, from: String, to: String) -> Result<KeyEntry, CoreError> {
+        let from = normalize_label(from)?;
+        let to = normalize_label(to)?;
         if from == to {
             return Err(CoreError::invalid_input("new label must be different"));
         }
@@ -194,7 +237,7 @@ impl KeyStore {
         include_private: bool,
     ) -> Result<ExportResult, CoreError> {
         let target_label = match label {
-            Some(l) => l,
+            Some(l) => normalize_label(l)?,
             None => {
                 let active = self.get_active().await.ok_or_else(|| {
                     CoreError::invalid_input("no active key; specify label or set active key")
@@ -204,9 +247,10 @@ impl KeyStore {
         };
 
         let data = self.inner.read().await;
-        let entry = data.keys.get(&target_label).ok_or_else(|| {
-            CoreError::invalid_input(format!("key not found: {}", target_label))
-        })?;
+        let entry = data
+            .keys
+            .get(&target_label)
+            .ok_or_else(|| CoreError::invalid_input(format!("key not found: {}", target_label)))?;
 
         let public_key_bech32 = entry.public_key.clone();
         let public_key = PublicKey::from_bech32(&public_key_bech32)
@@ -229,8 +273,7 @@ impl KeyStore {
                 ))
             })?;
 
-            let keys = Keys::parse(&secret)
-                .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            let keys = Keys::parse(&secret).map_err(|e| CoreError::invalid_input(e.to_string()))?;
 
             match format {
                 ExportFormat::Bech32 => {
@@ -338,10 +381,27 @@ fn default_export_format() -> ExportFormat {
     ExportFormat::Bech32
 }
 
+async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> Result<(), CoreError> {
+    let data = inner.read().await;
+    if data.keys.contains_key(label) {
+        return Err(CoreError::invalid_input("label already exists"));
+    }
+    Ok(())
+}
+
+fn normalize_label(label: String) -> Result<String, CoreError> {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::invalid_input("label must not be empty"));
+    }
+    Ok(trimmed.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ExportFormat, KeyStore};
     use crate::secrets::InMemorySecretStore;
+    use nostr::prelude::{Keys, ToBech32};
     use std::sync::Arc;
     use tempfile::tempdir;
 
@@ -352,11 +412,12 @@ mod tests {
         let pass = Arc::new(b"passphrase".to_vec());
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let store = KeyStore::load_or_init(path, pass, secrets)
+        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+
+        let entry = store
+            .generate("alice".to_string(), true, true)
             .await
             .unwrap();
-
-        let entry = store.generate("alice".to_string(), true, true).await.unwrap();
         assert_eq!(entry.label, "alice");
 
         let exported = store
@@ -378,5 +439,57 @@ mod tests {
             .await
             .unwrap();
         assert!(exported_again.private_key_nsec.is_some());
+    }
+
+    #[tokio::test]
+    async fn keystore_imports_watch_only_npub() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("keys.enc");
+        let pass = Arc::new(b"passphrase".to_vec());
+        let secrets = Arc::new(InMemorySecretStore::new());
+        let source = Keys::generate();
+        let npub = source.public_key().to_bech32().unwrap();
+
+        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+
+        let entry = store
+            .import_secret("watch".to_string(), npub.clone(), true, true)
+            .await
+            .unwrap();
+        assert_eq!(entry.public_key, npub);
+
+        let exported = store
+            .export_key(Some("watch".to_string()), ExportFormat::Bech32, false)
+            .await
+            .unwrap();
+        assert_eq!(exported.public_key_npub, npub);
+
+        let err = store
+            .export_key(Some("watch".to_string()), ExportFormat::Bech32, true)
+            .await
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("private key not found in secure storage"));
+    }
+
+    #[tokio::test]
+    async fn keystore_rejects_duplicate_labels() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("keys.enc");
+        let pass = Arc::new(b"passphrase".to_vec());
+        let secrets = Arc::new(InMemorySecretStore::new());
+
+        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+        store
+            .generate("alice".to_string(), true, true)
+            .await
+            .unwrap();
+
+        let err = store
+            .generate("alice".to_string(), false, true)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("label already exists"));
     }
 }
