@@ -30,8 +30,8 @@ pub fn ensure_keystore_secret(path: &Path) -> Result<Vec<u8>, CoreError> {
         let _ = f.flush();
     }
 
-    let mut f = File::open(path)
-        .map_err(|e| CoreError::Io(format!("opening {}: {e}", path.display())))?;
+    let mut f =
+        File::open(path).map_err(|e| CoreError::Io(format!("opening {}: {e}", path.display())))?;
     let mut s = String::new();
     f.read_to_string(&mut s)
         .map_err(|e| CoreError::Io(format!("reading {}: {e}", path.display())))?;

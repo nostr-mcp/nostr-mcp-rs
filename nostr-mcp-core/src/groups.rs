@@ -1,5 +1,5 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::{publish_event_builder, SendResult};
 use nostr_sdk::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -461,8 +461,8 @@ fn leave_group_tags(args: &LeaveGroupArgs) -> Result<Vec<Tag>, CoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CreateInviteArgs, DeleteEventArgs, EditGroupMetadataArgs, PutUserArgs, create_invite_tags,
-        delete_event_tags, edit_group_metadata_tags, put_user_tags,
+        create_invite_tags, delete_event_tags, edit_group_metadata_tags, put_user_tags,
+        CreateInviteArgs, DeleteEventArgs, EditGroupMetadataArgs, PutUserArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -481,21 +481,15 @@ mod tests {
 
         let tags = put_user_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "h").unwrap_or(false))
-        );
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false))
-        );
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "previous").unwrap_or(false))
-        );
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "h").unwrap_or(false)));
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false)));
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "previous").unwrap_or(false)));
     }
 
     #[test]
@@ -517,36 +511,24 @@ mod tests {
 
         let tags = edit_group_metadata_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "public").unwrap_or(false))
-        );
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "open").unwrap_or(false))
-        );
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "unrestricted").unwrap_or(false))
-        );
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "visible").unwrap_or(false))
-        );
-        assert!(
-            !values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "private").unwrap_or(false))
-        );
-        assert!(
-            !values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "closed").unwrap_or(false))
-        );
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "public").unwrap_or(false)));
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "open").unwrap_or(false)));
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "unrestricted").unwrap_or(false)));
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "visible").unwrap_or(false)));
+        assert!(!values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "private").unwrap_or(false)));
+        assert!(!values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "closed").unwrap_or(false)));
     }
 
     #[test]
@@ -562,11 +544,9 @@ mod tests {
 
         let tags = create_invite_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(
-            values
-                .iter()
-                .any(|tag| { tag.len() == 2 && tag[0] == "code" && tag[1] == "invite-code" })
-        );
+        assert!(values
+            .iter()
+            .any(|tag| { tag.len() == 2 && tag[0] == "code" && tag[1] == "invite-code" }));
     }
 
     #[test]
@@ -583,11 +563,9 @@ mod tests {
 
         let tags = delete_event_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(
-            values
-                .iter()
-                .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false))
-        );
+        assert!(values
+            .iter()
+            .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false)));
     }
 
     #[test]
@@ -604,9 +582,8 @@ mod tests {
         };
 
         let err = put_user_tags(&args).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("previous_refs entries must be 8-character hex prefixes")
-        );
+        assert!(err
+            .to_string()
+            .contains("previous_refs entries must be 8-character hex prefixes"));
     }
 }

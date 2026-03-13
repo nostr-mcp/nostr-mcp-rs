@@ -165,9 +165,7 @@ fn badge_award_tags(args: &Nip58BadgeAwardArgs) -> Result<Vec<Tag>, CoreError> {
             .map_err(|e| CoreError::invalid_input(format!("badge relay: {e}")))?;
         a_tag.push(relay.clone());
     }
-    tags.push(
-        Tag::parse(&a_tag).map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?,
-    );
+    tags.push(Tag::parse(&a_tag).map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?);
 
     for recipient in &args.recipients {
         let pubkey = PublicKey::parse(recipient.pubkey.trim())
@@ -203,9 +201,7 @@ fn profile_badges_tags(args: &Nip58ProfileBadgesArgs) -> Result<Vec<Tag>, CoreEr
                 .map_err(|e| CoreError::invalid_input(format!("badge relay: {e}")))?;
             a_tag.push(relay.clone());
         }
-        tags.push(
-            Tag::parse(&a_tag).map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?,
-        );
+        tags.push(Tag::parse(&a_tag).map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?);
 
         let event_id = EventId::parse(badge.award_event_id.trim())
             .map_err(|e| CoreError::invalid_input(format!("award event id: {e}")))?;
@@ -215,9 +211,7 @@ fn profile_badges_tags(args: &Nip58ProfileBadgesArgs) -> Result<Vec<Tag>, CoreEr
                 .map_err(|e| CoreError::invalid_input(format!("award relay: {e}")))?;
             e_tag.push(relay.clone());
         }
-        tags.push(
-            Tag::parse(&e_tag).map_err(|e| CoreError::invalid_input(format!("e tag: {e}")))?,
-        );
+        tags.push(Tag::parse(&e_tag).map_err(|e| CoreError::invalid_input(format!("e tag: {e}")))?);
     }
 
     Ok(tags)
@@ -303,9 +297,8 @@ mod tests {
                 badge: "1:0000000000000000000000000000000000000000000000000000000000000000:badge"
                     .to_string(),
                 badge_relay: None,
-                award_event_id:
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                        .to_string(),
+                award_event_id: "0000000000000000000000000000000000000000000000000000000000000000"
+                    .to_string(),
                 award_relay: None,
             }],
             content: None,
@@ -326,6 +319,9 @@ mod tests {
         })
         .unwrap();
         assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].as_slice(), &["d".to_string(), "profile_badges".to_string()]);
+        assert_eq!(
+            tags[0].as_slice(),
+            &["d".to_string(), "profile_badges".to_string()]
+        );
     }
 }

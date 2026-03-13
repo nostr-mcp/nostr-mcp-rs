@@ -29,8 +29,8 @@ pub fn encrypt_to_file<T: serde::Serialize>(
     value: &T,
 ) -> Result<(), CoreError> {
     ensure_parent_dir(path)?;
-    let json = serde_json::to_vec(value)
-        .map_err(|e| CoreError::SerdeJson(format!("serialize: {e}")))?;
+    let json =
+        serde_json::to_vec(value).map_err(|e| CoreError::SerdeJson(format!("serialize: {e}")))?;
 
     let mut salt = [0u8; SALT_LEN];
     rand::thread_rng().fill_bytes(&mut salt);

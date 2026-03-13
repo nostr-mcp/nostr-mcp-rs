@@ -63,7 +63,7 @@ pub fn default_config_root() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{NostrMcpPaths, NostrMcpRuntime, default_config_root};
+    use super::{default_config_root, NostrMcpPaths, NostrMcpRuntime};
     use std::path::PathBuf;
 
     #[test]
@@ -75,12 +75,10 @@ mod tests {
             runtime.paths,
             NostrMcpPaths::from_root(default_config_root())
         );
-        assert!(
-            runtime
-                .paths
-                .config_root
-                .ends_with(PathBuf::from(".config").join("nostr-mcp"))
-        );
+        assert!(runtime
+            .paths
+            .config_root
+            .ends_with(PathBuf::from(".config").join("nostr-mcp")));
     }
 
     #[test]

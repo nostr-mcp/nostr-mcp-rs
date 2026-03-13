@@ -120,10 +120,7 @@ pub async fn list_events(
     Ok(events.into_iter().collect())
 }
 
-pub async fn query_events(
-    client: &Client,
-    args: QueryEventsArgs,
-) -> Result<Vec<Event>, CoreError> {
+pub async fn query_events(client: &Client, args: QueryEventsArgs) -> Result<Vec<Event>, CoreError> {
     let filters = parse_filters(&args)?;
     let timeout = std::time::Duration::from_secs(args.timeout());
     let mut out = Vec::new();
@@ -422,7 +419,11 @@ mod tests {
         assert_eq!(filter.limit, Some(5));
         assert_eq!(filter.since, Some(Timestamp::from(10)));
         assert_eq!(filter.until, Some(Timestamp::from(20)));
-        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(filter
+            .authors
+            .as_ref()
+            .unwrap()
+            .contains(&keys.public_key()));
 
         let hashtag_tag = SingleLetterTag::lowercase(Alphabet::T);
         let identifier_tag = SingleLetterTag::lowercase(Alphabet::D);

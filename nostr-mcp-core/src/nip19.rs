@@ -342,8 +342,8 @@ fn looks_like_coordinate(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget, Nip19EntityType, decode_nip19,
-        encode_nip19,
+        decode_nip19, encode_nip19, Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget,
+        Nip19EntityType,
     };
     use nostr::nips::nip19::ToBech32;
     use nostr::prelude::{EventId, Keys};

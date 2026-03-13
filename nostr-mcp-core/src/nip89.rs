@@ -75,9 +75,10 @@ fn recommendation_tags(args: &Nip89RecommendArgs) -> Result<Vec<Tag>, CoreError>
     }
 
     let mut tags = Vec::with_capacity(args.handlers.len() + 1);
-    tags.push(Tag::parse(&["d".to_string(), args.supported_kind.to_string()]).map_err(
-        |e| CoreError::invalid_input(format!("d tag: {e}")),
-    )?);
+    tags.push(
+        Tag::parse(&["d".to_string(), args.supported_kind.to_string()])
+            .map_err(|e| CoreError::invalid_input(format!("d tag: {e}")))?,
+    );
 
     for handler in &args.handlers {
         if handler.platform.is_some() && handler.relay.is_none() {
@@ -107,8 +108,7 @@ fn recommendation_tags(args: &Nip89RecommendArgs) -> Result<Vec<Tag>, CoreError>
         }
 
         tags.push(
-            Tag::parse(&values)
-                .map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?,
+            Tag::parse(&values).map_err(|e| CoreError::invalid_input(format!("a tag: {e}")))?,
         );
     }
 
@@ -153,7 +153,10 @@ fn handler_info_tags(args: &Nip89HandlerInfoArgs) -> Result<Vec<Tag>, CoreError>
             }
         }
 
-        let mut values = vec![link.platform.trim().to_string(), link.url.trim().to_string()];
+        let mut values = vec![
+            link.platform.trim().to_string(),
+            link.url.trim().to_string(),
+        ];
         if let Some(entity) = link.entity.as_ref() {
             values.push(entity.clone());
         }
@@ -175,7 +178,10 @@ fn is_valid_entity(entity: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{handler_info_tags, recommendation_tags, Nip89HandlerInfoArgs, Nip89HandlerLink, Nip89HandlerRecommendation, Nip89RecommendArgs};
+    use super::{
+        handler_info_tags, recommendation_tags, Nip89HandlerInfoArgs, Nip89HandlerLink,
+        Nip89HandlerRecommendation, Nip89RecommendArgs,
+    };
 
     #[test]
     fn recommendation_tags_require_handlers() {
@@ -195,7 +201,8 @@ mod tests {
         let err = recommendation_tags(&Nip89RecommendArgs {
             supported_kind: 1,
             handlers: vec![Nip89HandlerRecommendation {
-                address: "1:0000000000000000000000000000000000000000000000000000000000000000:abc".to_string(),
+                address: "1:0000000000000000000000000000000000000000000000000000000000000000:abc"
+                    .to_string(),
                 relay: Some("wss://relay.example".to_string()),
                 platform: Some("web".to_string()),
             }],
@@ -212,7 +219,9 @@ mod tests {
         let err = recommendation_tags(&Nip89RecommendArgs {
             supported_kind: 1,
             handlers: vec![Nip89HandlerRecommendation {
-                address: "31990:0000000000000000000000000000000000000000000000000000000000000000:abc".to_string(),
+                address:
+                    "31990:0000000000000000000000000000000000000000000000000000000000000000:abc"
+                        .to_string(),
                 relay: None,
                 platform: Some("web".to_string()),
             }],
@@ -258,8 +267,14 @@ mod tests {
         })
         .unwrap();
 
-        assert!(tags.iter().any(|tag| tag.as_slice().first().map(String::as_str) == Some("d")));
-        assert!(tags.iter().any(|tag| tag.as_slice().first().map(String::as_str) == Some("k")));
-        assert!(tags.iter().any(|tag| tag.as_slice().first().map(String::as_str) == Some("web")));
+        assert!(tags
+            .iter()
+            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("d")));
+        assert!(tags
+            .iter()
+            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("k")));
+        assert!(tags
+            .iter()
+            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("web")));
     }
 }

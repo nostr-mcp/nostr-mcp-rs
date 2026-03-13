@@ -1,5 +1,5 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::{publish_event_builder, SendResult};
 use nostr::nips::nip88::{Poll, PollOption as Nip88PollOption, PollResponse, PollType};
 use nostr_sdk::prelude::*;
 use schemars::JsonSchema;

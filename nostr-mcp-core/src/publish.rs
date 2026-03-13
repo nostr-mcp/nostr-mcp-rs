@@ -196,8 +196,8 @@ pub async fn publish_signed_event(
 }
 
 fn parse_signed_event(event_json: &str) -> Result<Event, CoreError> {
-    let event =
-        Event::from_json(event_json).map_err(|e| CoreError::invalid_input(format!("invalid event json: {e}")))?;
+    let event = Event::from_json(event_json)
+        .map_err(|e| CoreError::invalid_input(format!("invalid event json: {e}")))?;
     event
         .verify()
         .map_err(|e| CoreError::invalid_input(format!("invalid event signature: {e}")))?;
@@ -310,10 +310,7 @@ fn thread_tags(args: &PostThreadArgs) -> Result<Vec<Tag>, CoreError> {
     Ok(tags)
 }
 
-pub async fn post_thread(
-    client: &Client,
-    args: PostThreadArgs,
-) -> Result<SendResult, CoreError> {
+pub async fn post_thread(client: &Client, args: PostThreadArgs) -> Result<SendResult, CoreError> {
     let tags = thread_tags(&args)?;
     let mut builder = EventBuilder::new(Kind::from(11), args.content).tags(tags);
 
@@ -359,10 +356,7 @@ fn repost_builder(
     Ok(builder)
 }
 
-pub async fn post_repost(
-    client: &Client,
-    args: PostRepostArgs,
-) -> Result<SendResult, CoreError> {
+pub async fn post_repost(client: &Client, args: PostRepostArgs) -> Result<SendResult, CoreError> {
     let target = parse_signed_event(&args.event_json)?;
     let builder = repost_builder(&target, args.relay_hint, args.pow)?;
     publish_event_builder(client, builder, args.to_relays).await
@@ -588,8 +582,9 @@ pub async fn post_reaction(
 }
 
 fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String), CoreError> {
-    let event_id = EventId::from_hex(&args.event_id)
-        .map_err(|e| CoreError::invalid_input(format!("invalid event id {}: {e}", args.event_id)))?;
+    let event_id = EventId::from_hex(&args.event_id).map_err(|e| {
+        CoreError::invalid_input(format!("invalid event id {}: {e}", args.event_id))
+    })?;
     let event_pubkey = PublicKey::from_hex(&args.event_pubkey).map_err(|e| {
         CoreError::invalid_input(format!("invalid event pubkey {}: {e}", args.event_pubkey))
     })?;

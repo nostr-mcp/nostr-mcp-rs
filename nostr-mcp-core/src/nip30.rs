@@ -50,9 +50,7 @@ pub fn parse_nip30_emojis(args: Nip30ParseArgs) -> Nip30ParseResult {
     }
 }
 
-fn parse_emoji_tags(
-    tags: Vec<Vec<String>>,
-) -> (Vec<Nip30EmojiTag>, HashMap<String, String>) {
+fn parse_emoji_tags(tags: Vec<Vec<String>>) -> (Vec<Nip30EmojiTag>, HashMap<String, String>) {
     let mut parsed = Vec::new();
     let mut map = HashMap::new();
 
@@ -110,10 +108,7 @@ fn parse_emoji_tags(
     (parsed, map)
 }
 
-fn extract_mentions(
-    content: &str,
-    emoji_map: &HashMap<String, String>,
-) -> Vec<Nip30EmojiMention> {
+fn extract_mentions(content: &str, emoji_map: &HashMap<String, String>) -> Vec<Nip30EmojiMention> {
     let mut mentions = Vec::new();
     let bytes = content.as_bytes();
     let mut index = 0;
@@ -192,8 +187,8 @@ fn find_next_colon(bytes: &[u8], start: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_mentions, is_supported_kind, parse_emoji_tags, parse_nip30_emojis};
     use super::Nip30ParseArgs;
+    use super::{extract_mentions, is_supported_kind, parse_emoji_tags, parse_nip30_emojis};
 
     #[test]
     fn parse_emoji_tags_accepts_valid() {
@@ -250,7 +245,10 @@ mod tests {
         assert!(parsed[0].valid);
         assert_eq!(mentions.len(), 1);
         assert!(mentions[0].valid);
-        assert_eq!(mentions[0].url.as_deref(), Some("https://example.com/smile.png"));
+        assert_eq!(
+            mentions[0].url.as_deref(),
+            Some("https://example.com/smile.png")
+        );
     }
 
     #[test]

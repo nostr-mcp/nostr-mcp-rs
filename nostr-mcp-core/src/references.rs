@@ -164,7 +164,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
 
 #[cfg(test)]
 mod tests {
-    use super::{ParseReferencesArgs, ReferenceType, extract_nostr_references};
+    use super::{extract_nostr_references, ParseReferencesArgs, ReferenceType};
     use nostr::prelude::*;
 
     #[test]
@@ -181,16 +181,12 @@ mod tests {
         let references = extract_nostr_references(&args.content);
 
         assert_eq!(references.len(), 2);
-        assert!(
-            references
-                .iter()
-                .any(|r| matches!(r.reference_type, ReferenceType::Npub))
-        );
-        assert!(
-            references
-                .iter()
-                .any(|r| matches!(r.reference_type, ReferenceType::Note))
-        );
+        assert!(references
+            .iter()
+            .any(|r| matches!(r.reference_type, ReferenceType::Npub)));
+        assert!(references
+            .iter()
+            .any(|r| matches!(r.reference_type, ReferenceType::Note)));
     }
 
     #[test]

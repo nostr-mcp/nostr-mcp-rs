@@ -467,10 +467,9 @@ mod tests {
             .export_key(Some("watch".to_string()), ExportFormat::Bech32, true)
             .await
             .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("private key not found in secure storage")
-        );
+        assert!(err
+            .to_string()
+            .contains("private key not found in secure storage"));
     }
 
     #[tokio::test]

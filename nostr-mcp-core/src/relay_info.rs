@@ -1,8 +1,8 @@
 use crate::error::CoreError;
-use nostr::JsonUtil;
 use nostr::nips::nip11::RelayInformationDocument;
-use reqwest::Client;
+use nostr::JsonUtil;
 use reqwest::header::ACCEPT;
+use reqwest::Client;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

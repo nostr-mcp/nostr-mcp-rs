@@ -82,7 +82,10 @@ where
     follows
 }
 
-pub async fn fetch_follows(client: &Client, pubkey: &PublicKey) -> Result<Vec<FollowEntry>, CoreError> {
+pub async fn fetch_follows(
+    client: &Client,
+    pubkey: &PublicKey,
+) -> Result<Vec<FollowEntry>, CoreError> {
     let filter = Filter::new()
         .author(*pubkey)
         .kind(Kind::ContactList)

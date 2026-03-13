@@ -40,13 +40,8 @@ pub fn encrypt_nip44(args: Nip44EncryptArgs) -> Result<Nip44EncryptResult, CoreE
     let secret_key = parse_secret_key(&args.private_key)?;
     let public_key = parse_public_key(&args.public_key)?;
     let version = parse_version(args.version)?;
-    let ciphertext = nip44::encrypt(
-        &secret_key,
-        &public_key,
-        args.plaintext.as_bytes(),
-        version,
-    )
-    .map_err(|e| CoreError::Crypto(format!("nip44 encrypt: {e}")))?;
+    let ciphertext = nip44::encrypt(&secret_key, &public_key, args.plaintext.as_bytes(), version)
+        .map_err(|e| CoreError::Crypto(format!("nip44 encrypt: {e}")))?;
     let peer_public_key_npub = public_key
         .to_bech32()
         .map_err(|e| CoreError::invalid_input(format!("invalid pubkey: {e}")))?;
@@ -89,9 +84,9 @@ fn payload_version(payload: &str) -> Result<u8, CoreError> {
     let bytes = general_purpose::STANDARD
         .decode(payload.as_bytes())
         .map_err(|e| CoreError::Base64(format!("nip44 payload: {e}")))?;
-    let version = bytes.first().ok_or_else(|| {
-        CoreError::invalid_input("nip44 payload missing version")
-    })?;
+    let version = bytes
+        .first()
+        .ok_or_else(|| CoreError::invalid_input("nip44 payload missing version"))?;
     nip44::Version::try_from(*version)
         .map_err(|e| CoreError::invalid_input(format!("invalid nip44 version: {e}")))?;
     Ok(*version)
@@ -131,21 +126,19 @@ fn parse_public_key(value: &str) -> Result<PublicKey, CoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        decrypt_nip44, encrypt_nip44, payload_version, parse_public_key, parse_secret_key,
+        decrypt_nip44, encrypt_nip44, parse_public_key, parse_secret_key, payload_version,
         Nip44DecryptArgs, Nip44EncryptArgs,
     };
     use nostr::prelude::{Keys, SecretKey, ToBech32};
 
     #[test]
     fn nip44_encrypt_decrypt_round_trip() {
-        let alice_secret = SecretKey::from_hex(
-            "5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab3a",
-        )
-        .unwrap();
-        let bob_secret = SecretKey::from_hex(
-            "4b22aa260e4acb7021e32f38a6cdf4b673c6a277755bfce287e370c924dc936d",
-        )
-        .unwrap();
+        let alice_secret =
+            SecretKey::from_hex("5c0c523f52a5b6fad39ed2403092df8cebc36318b39383bca6c00808626fab3a")
+                .unwrap();
+        let bob_secret =
+            SecretKey::from_hex("4b22aa260e4acb7021e32f38a6cdf4b673c6a277755bfce287e370c924dc936d")
+                .unwrap();
 
         let alice_keys = Keys::new(alice_secret);
         let bob_keys = Keys::new(bob_secret);

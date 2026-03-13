@@ -50,9 +50,7 @@ pub struct Nip05VerifyResult {
     pub valid: bool,
 }
 
-pub async fn resolve_nip05(
-    args: Nip05ResolveArgs,
-) -> Result<Nip05ResolveResult, CoreError> {
+pub async fn resolve_nip05(args: Nip05ResolveArgs) -> Result<Nip05ResolveResult, CoreError> {
     let address = Nip05Address::parse(args.identifier.trim())
         .map_err(|e| CoreError::invalid_input(format!("invalid nip05 address: {e}")))?;
     let url = address.url().to_string();
@@ -74,9 +72,7 @@ pub async fn resolve_nip05(
     })
 }
 
-pub async fn verify_nip05(
-    args: Nip05VerifyArgs,
-) -> Result<Nip05VerifyResult, CoreError> {
+pub async fn verify_nip05(args: Nip05VerifyArgs) -> Result<Nip05VerifyResult, CoreError> {
     let address = Nip05Address::parse(args.identifier.trim())
         .map_err(|e| CoreError::invalid_input(format!("invalid nip05 address: {e}")))?;
     let pubkey = parse_pubkey(&args.pubkey)?;
@@ -157,7 +153,10 @@ mod tests {
     #[test]
     fn nip05_address_builds_url() {
         let address = Nip05Address::parse("bob@example.com").unwrap();
-        assert!(address.url().as_str().contains("/.well-known/nostr.json?name=bob"));
+        assert!(address
+            .url()
+            .as_str()
+            .contains("/.well-known/nostr.json?name=bob"));
     }
 
     #[test]
