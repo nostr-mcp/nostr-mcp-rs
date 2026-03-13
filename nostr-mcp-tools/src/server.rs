@@ -3,58 +3,57 @@ use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::client::{ensure_client, reset_cached_client};
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::events::{
-    list_events, list_long_form_events, query_events, search_events,
-    subscription_targets_mentions_me, subscription_targets_my_metadata,
-    subscription_targets_my_notes, EventsListArgs, LongFormListArgs, QueryEventsArgs,
-    SearchEventsArgs,
+    EventsListArgs, LongFormListArgs, QueryEventsArgs, SearchEventsArgs, list_events,
+    list_long_form_events, query_events, search_events, subscription_targets_mentions_me,
+    subscription_targets_my_metadata, subscription_targets_my_notes,
 };
 use nostr_mcp_core::follows::{
-    fetch_follows, publish_follows, AddFollowArgs, PublishFollowsResult, RemoveFollowArgs,
-    SetFollowsArgs,
+    AddFollowArgs, PublishFollowsResult, RemoveFollowArgs, SetFollowsArgs, fetch_follows,
+    publish_follows,
 };
 use nostr_mcp_core::groups::{
-    create_group, create_invite, delete_group, delete_group_event, edit_group_metadata, join_group,
-    leave_group, put_user, remove_user, CreateGroupArgs, CreateInviteArgs, DeleteEventArgs,
-    DeleteGroupArgs, EditGroupMetadataArgs, JoinGroupArgs, LeaveGroupArgs, PutUserArgs,
-    RemoveUserArgs,
+    CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
+    JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs, create_group, create_invite,
+    delete_group, delete_group_event, edit_group_metadata, join_group, leave_group, put_user,
+    remove_user,
 };
 use nostr_mcp_core::key_store::{
     EmptyArgs, ExportArgs, GenerateArgs, ImportArgs, KeyStore, RemoveArgs, RenameLabelArgs,
     SetActiveArgs,
 };
-use nostr_mcp_core::keys::{derive_public, verify_key, DerivePublicArgs, VerifyArgs};
+use nostr_mcp_core::keys::{DerivePublicArgs, VerifyArgs, derive_public, verify_key};
 use nostr_mcp_core::metadata::{
-    args_to_profile, fetch_metadata, fetch_profile, publish_metadata, FetchMetadataArgs,
-    MetadataResult, ProfileGetArgs, SetMetadataArgs,
+    FetchMetadataArgs, MetadataResult, ProfileGetArgs, SetMetadataArgs, args_to_profile,
+    fetch_metadata, fetch_profile, publish_metadata,
 };
 use nostr_mcp_core::nip01;
-use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05, Nip05ResolveArgs, Nip05VerifyArgs};
-use nostr_mcp_core::nip30::{parse_nip30_emojis, Nip30ParseArgs};
-use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44, Nip44DecryptArgs, Nip44EncryptArgs};
+use nostr_mcp_core::nip05::{Nip05ResolveArgs, Nip05VerifyArgs, resolve_nip05, verify_nip05};
+use nostr_mcp_core::nip30::{Nip30ParseArgs, parse_nip30_emojis};
+use nostr_mcp_core::nip44::{Nip44DecryptArgs, Nip44EncryptArgs, decrypt_nip44, encrypt_nip44};
 use nostr_mcp_core::nip58::{
-    post_badge_award, post_badge_definition, post_profile_badges, Nip58BadgeAwardArgs,
-    Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
+    Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs, post_badge_award,
+    post_badge_definition, post_profile_badges,
 };
 use nostr_mcp_core::nip89::{
-    post_handler_info, post_recommendation, Nip89HandlerInfoArgs, Nip89RecommendArgs,
+    Nip89HandlerInfoArgs, Nip89RecommendArgs, post_handler_info, post_recommendation,
 };
 use nostr_mcp_core::polls::{
-    create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
+    CreatePollArgs, GetPollResultsArgs, VotePollArgs, create_poll, get_poll_results, vote_poll,
 };
 use nostr_mcp_core::publish::{
-    create_text_event, delete_events, post_anonymous_note, post_group_chat, post_long_form,
-    post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
-    sign_unsigned_event, CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs,
-    PostLongFormArgs, PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs,
-    PublishSignedEventArgs, SignEventArgs,
+    CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
+    PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
+    SignEventArgs, create_text_event, delete_events, post_anonymous_note, post_group_chat,
+    post_long_form, post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
+    sign_unsigned_event,
 };
-use nostr_mcp_core::references::{parse_text_references, ParseReferencesArgs};
-use nostr_mcp_core::relay_info::{fetch_relay_info, RelayInfoArgs};
+use nostr_mcp_core::references::{ParseReferencesArgs, parse_text_references};
+use nostr_mcp_core::relay_info::{RelayInfoArgs, fetch_relay_info};
 use nostr_mcp_core::relays::{
-    connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
-    RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs,
+    RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs, connect_relays, disconnect_relays,
+    get_relay_urls, list_relays, set_relays, status_summary,
 };
-use nostr_mcp_core::replies::{post_comment, post_reply, PostCommentArgs, PostReplyArgs};
+use nostr_mcp_core::replies::{PostCommentArgs, PostReplyArgs, post_comment, post_reply};
 #[cfg(not(feature = "keyring"))]
 use nostr_mcp_core::secrets::InMemorySecretStore;
 #[cfg(feature = "keyring")]
@@ -63,6 +62,7 @@ use nostr_mcp_core::secrets::SecretStore;
 use nostr_mcp_core::settings::{FollowEntry, KeySettings, SettingsStore};
 use nostr_sdk::prelude::*;
 use rmcp::{
+    ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
         CallToolResult, Content, ErrorData, Implementation, ProtocolVersion, ServerCapabilities,
@@ -71,13 +71,12 @@ use rmcp::{
     schemars::JsonSchema,
     tool, tool_handler, tool_router,
     transport::stdio,
-    ServerHandler, ServiceExt,
 };
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{OnceCell, RwLock};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tracing::info;
 
 static KEYSTORE: OnceCell<RwLock<Arc<KeyStore>>> = OnceCell::const_new();
@@ -1078,7 +1077,7 @@ impl NostrMcpServer {
     }
 
     #[tool(
-        description = "Edit group metadata using the active key (kind 9002, NIP-29). Moderation event requiring admin privileges. Supports partial updates - only include fields to change. Returns the event ID and pubkey that signed it for verification. Optional: name, picture, about, public (bool), open (bool), previous_refs (array), pow (u8), to_relays (urls)"
+        description = "Edit group metadata using the active key (kind 9002, NIP-29). Moderation event requiring admin privileges. Supports partial updates - only include fields to change. Positive visibility/write/read toggles map to NIP-29 moderation tags: unrestricted, visible, public, open. Returns the event ID and pubkey that signed it for verification. Optional: name, picture, about, unrestricted (bool), visible (bool), public (bool), open (bool), previous_refs (array), pow (u8), to_relays (urls)"
     )]
     pub async fn nostr_groups_edit_metadata(
         &self,
@@ -1142,7 +1141,7 @@ impl NostrMcpServer {
     }
 
     #[tool(
-        description = "Create an invite code for a group using the active key (kind 9009, NIP-29). Moderation event requiring admin privileges. Generated invite can be used with kind 9021 join requests. Returns the event ID and pubkey that signed it for verification. Optional: previous_refs (array), pow (u8), to_relays (urls)"
+        description = "Create an invite code for a group using the active key (kind 9009, NIP-29). Moderation event requiring admin privileges. Generated invite can be used with kind 9021 join requests. Returns the event ID and pubkey that signed it for verification. Optional: code, previous_refs (array), pow (u8), to_relays (urls)"
     )]
     pub async fn nostr_groups_create_invite(
         &self,
@@ -1583,7 +1582,7 @@ impl ServerHandler for NostrMcpServer {
 async fn wait_for_shutdown() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix::{SignalKind, signal};
         let mut term = signal(SignalKind::terminate()).expect("signal");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
