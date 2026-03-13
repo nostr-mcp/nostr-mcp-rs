@@ -93,10 +93,9 @@ pub async fn subscription_targets_mentions_me(
     until: Option<Timestamp>,
 ) -> Filter {
     let default_since = Timestamp::now() - 86400 * 7;
-    let needle = pk.to_string();
     let mut filter = Filter::new()
         .kind(Kind::TextNote)
-        .search(needle)
+        .pubkey(pk)
         .since(since.unwrap_or(default_since));
 
     if let Some(u) = until {
@@ -326,8 +325,13 @@ mod tests {
     async fn mentions_me_sets_search() {
         let pk = Keys::generate().public_key();
         let filter = subscription_targets_mentions_me(pk, None, None).await;
-        assert_eq!(filter.search.as_deref(), Some(pk.to_string().as_str()));
         assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
+        let p_tag = SingleLetterTag::lowercase(Alphabet::P);
+        assert!(filter
+            .generic_tags
+            .get(&p_tag)
+            .unwrap()
+            .contains(&pk.to_hex()));
         assert!(filter.since.is_some());
     }
 
