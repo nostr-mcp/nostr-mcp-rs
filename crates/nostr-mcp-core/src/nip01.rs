@@ -1,21 +1,21 @@
 use crate::error::CoreError;
 
 pub fn validate_time_bounds(since: Option<u64>, until: Option<u64>) -> Result<(), CoreError> {
-    if let (Some(start), Some(end)) = (since, until) {
-        if start > end {
-            return Err(CoreError::invalid_input(
-                "since must be less than or equal to until",
-            ));
-        }
+    if let (Some(start), Some(end)) = (since, until)
+        && start > end
+    {
+        return Err(CoreError::invalid_input(
+            "since must be less than or equal to until",
+        ));
     }
     Ok(())
 }
 
 pub fn validate_limit(limit: Option<u64>) -> Result<(), CoreError> {
-    if let Some(value) = limit {
-        if value == 0 {
-            return Err(CoreError::invalid_input("limit must be greater than zero"));
-        }
+    if let Some(value) = limit
+        && value == 0
+    {
+        return Err(CoreError::invalid_input("limit must be greater than zero"));
     }
     Ok(())
 }

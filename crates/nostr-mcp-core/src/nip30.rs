@@ -114,47 +114,47 @@ fn extract_mentions(content: &str, emoji_map: &HashMap<String, String>) -> Vec<N
     let mut index = 0;
 
     while index < bytes.len() {
-        if bytes[index] == b':' {
-            if let Some(end) = find_next_colon(bytes, index + 1) {
-                let shortcode = &content[index + 1..end];
-                let raw = content[index..=end].to_string();
+        if bytes[index] == b':'
+            && let Some(end) = find_next_colon(bytes, index + 1)
+        {
+            let shortcode = &content[index + 1..end];
+            let raw = content[index..=end].to_string();
 
-                if shortcode.is_empty() {
-                    index = end + 1;
-                    continue;
-                }
-
-                if !is_valid_shortcode(shortcode) {
-                    mentions.push(Nip30EmojiMention {
-                        raw,
-                        shortcode: shortcode.to_string(),
-                        url: None,
-                        valid: false,
-                        error: Some("invalid emoji shortcode".to_string()),
-                    });
-                    index = end + 1;
-                    continue;
-                }
-
-                let url = emoji_map.get(shortcode).cloned();
-                let valid = url.is_some();
-                let error = if valid {
-                    None
-                } else {
-                    Some("missing emoji tag".to_string())
-                };
-
-                mentions.push(Nip30EmojiMention {
-                    raw,
-                    shortcode: shortcode.to_string(),
-                    url,
-                    valid,
-                    error,
-                });
-
+            if shortcode.is_empty() {
                 index = end + 1;
                 continue;
             }
+
+            if !is_valid_shortcode(shortcode) {
+                mentions.push(Nip30EmojiMention {
+                    raw,
+                    shortcode: shortcode.to_string(),
+                    url: None,
+                    valid: false,
+                    error: Some("invalid emoji shortcode".to_string()),
+                });
+                index = end + 1;
+                continue;
+            }
+
+            let url = emoji_map.get(shortcode).cloned();
+            let valid = url.is_some();
+            let error = if valid {
+                None
+            } else {
+                Some("missing emoji tag".to_string())
+            };
+
+            mentions.push(Nip30EmojiMention {
+                raw,
+                shortcode: shortcode.to_string(),
+                url,
+                valid,
+                error,
+            });
+
+            index = end + 1;
+            continue;
         }
 
         index += 1;

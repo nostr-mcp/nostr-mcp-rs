@@ -134,10 +134,10 @@ pub async fn query_events(client: &Client, args: QueryEventsArgs) -> Result<Vec<
         for event in events.into_iter() {
             if seen.insert(event.id) {
                 out.push(event);
-                if let Some(limit) = args.limit {
-                    if out.len() >= limit as usize {
-                        return Ok(out);
-                    }
+                if let Some(limit) = args.limit
+                    && out.len() >= limit as usize
+                {
+                    return Ok(out);
                 }
             }
         }

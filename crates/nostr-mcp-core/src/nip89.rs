@@ -145,12 +145,12 @@ fn handler_info_tags(args: &Nip89HandlerInfoArgs) -> Result<Vec<Tag>, CoreError>
         Url::parse(link.url.trim())
             .map_err(|e| CoreError::invalid_input(format!("handler url: {e}")))?;
 
-        if let Some(entity) = link.entity.as_ref() {
-            if !is_valid_entity(entity) {
-                return Err(CoreError::invalid_input(format!(
-                    "invalid entity type: {entity}"
-                )));
-            }
+        if let Some(entity) = link.entity.as_ref()
+            && !is_valid_entity(entity)
+        {
+            return Err(CoreError::invalid_input(format!(
+                "invalid entity type: {entity}"
+            )));
         }
 
         let mut values = vec![

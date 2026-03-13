@@ -66,17 +66,17 @@ where
 {
     let mut follows = Vec::new();
     for tag in tags {
-        if tag.kind() == TagKind::p() {
-            if let Some(pubkey_str) = tag.content() {
-                let tag_vec = tag.clone().to_vec();
-                let relay_url = tag_vec.get(2).cloned().filter(|s| !s.is_empty());
-                let petname = tag_vec.get(3).cloned().filter(|s| !s.is_empty());
-                follows.push(FollowEntry {
-                    pubkey: pubkey_str.to_string(),
-                    relay_url,
-                    petname,
-                });
-            }
+        if tag.kind() == TagKind::p()
+            && let Some(pubkey_str) = tag.content()
+        {
+            let tag_vec = tag.clone().to_vec();
+            let relay_url = tag_vec.get(2).cloned().filter(|s| !s.is_empty());
+            let petname = tag_vec.get(3).cloned().filter(|s| !s.is_empty());
+            follows.push(FollowEntry {
+                pubkey: pubkey_str.to_string(),
+                relay_url,
+                petname,
+            });
         }
     }
     follows

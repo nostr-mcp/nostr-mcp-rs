@@ -66,13 +66,13 @@ async fn build_from_keystore(
     let pubkey_hex = pubkey.to_hex();
     let settings = settings_store.get_settings(&pubkey_hex).await;
 
-    if let Some(ref settings) = settings {
-        if !settings.relays.is_empty() {
-            for url in &settings.relays {
-                let _ = client.add_relay(url).await;
-            }
-            client.connect().await;
+    if let Some(ref settings) = settings
+        && !settings.relays.is_empty()
+    {
+        for url in &settings.relays {
+            let _ = client.add_relay(url).await;
         }
+        client.connect().await;
     }
 
     tokio::spawn({
@@ -81,21 +81,19 @@ async fn build_from_keystore(
         let settings_store_clone = settings_store.clone();
         let pubkey_hex_clone = pubkey_hex.clone();
         async move {
-            if let Some(settings) = settings {
-                if !settings.relays.is_empty() {
-                    if let Ok((synced_follows, _published)) =
-                        follows::sync_follows(&client_clone, &pubkey_clone, settings.follows).await
-                    {
-                        let updated_settings = KeySettings {
-                            relays: settings.relays,
-                            metadata: settings.metadata,
-                            follows: synced_follows,
-                        };
-                        let _ = settings_store_clone
-                            .save_settings(pubkey_hex_clone, updated_settings)
-                            .await;
-                    }
-                }
+            if let Some(settings) = settings
+                && !settings.relays.is_empty()
+                && let Ok((synced_follows, _published)) =
+                    follows::sync_follows(&client_clone, &pubkey_clone, settings.follows).await
+            {
+                let updated_settings = KeySettings {
+                    relays: settings.relays,
+                    metadata: settings.metadata,
+                    follows: synced_follows,
+                };
+                let _ = settings_store_clone
+                    .save_settings(pubkey_hex_clone, updated_settings)
+                    .await;
             }
         }
     });

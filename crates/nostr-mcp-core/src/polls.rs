@@ -268,10 +268,10 @@ where
     for vote_event in vote_events {
         let vote_time = vote_event.created_at.as_secs();
 
-        if let Some(end_time) = ends_at {
-            if vote_time > end_time {
-                continue;
-            }
+        if let Some(end_time) = ends_at
+            && vote_time > end_time
+        {
+            continue;
         }
 
         let pubkey = vote_event.pubkey.to_hex();
@@ -288,10 +288,10 @@ where
             continue;
         }
 
-        if let Some((existing_time, _)) = votes_by_pubkey.get(&pubkey) {
-            if vote_time <= *existing_time {
-                continue;
-            }
+        if let Some((existing_time, _)) = votes_by_pubkey.get(&pubkey)
+            && vote_time <= *existing_time
+        {
+            continue;
         }
 
         votes_by_pubkey.insert(pubkey, (vote_time, selected_options));
@@ -362,7 +362,7 @@ mod tests {
         let vote_b = build_vote_event(&keys, 200, vec!["b".to_string()]);
         let late_vote = build_vote_event(&Keys::generate(), 300, vec!["a".to_string()]);
 
-        let votes = vec![vote_a.clone(), vote_b.clone(), late_vote];
+        let votes = [vote_a.clone(), vote_b.clone(), late_vote];
         let (counts, total_votes) = tally_votes(
             votes.iter(),
             &options_map,
