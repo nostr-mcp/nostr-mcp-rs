@@ -1,9 +1,11 @@
 use crate::error::CoreError;
-use crate::publish::{publish_event_builder, SendResult};
+use crate::publish::{SendResult, publish_event_builder};
+use nostr::nips::nip88::{Poll, PollOption as Nip88PollOption, PollResponse, PollType};
 use nostr_sdk::prelude::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct PollOption {
@@ -54,63 +56,44 @@ pub struct PollResults {
     pub ends_at: Option<u64>,
 }
 
-struct PollParsed {
-    options: HashMap<String, String>,
-    poll_type: String,
-    ends_at: Option<u64>,
-}
-
 pub async fn create_poll(client: &Client, args: CreatePollArgs) -> Result<SendResult, CoreError> {
+    let question = ensure_non_empty("question", &args.question)?;
     if args.options.len() < 2 {
         return Err(CoreError::invalid_input(
             "poll must have at least 2 options".to_string(),
         ));
     }
+    if args.relay_urls.is_empty() {
+        return Err(CoreError::invalid_input(
+            "relay_urls must include at least one relay".to_string(),
+        ));
+    }
 
     let mut option_ids = HashSet::new();
-    for option in &args.options {
-        if !option_ids.insert(&option.option_id) {
+    let mut options = Vec::with_capacity(args.options.len());
+    for option in args.options {
+        let option_id = ensure_option_id(&option.option_id)?;
+        let label = ensure_non_empty("option label", &option.label)?;
+        if !option_ids.insert(option_id.clone()) {
             return Err(CoreError::invalid_input(format!(
-                "duplicate option ID: {}",
-                option.option_id
+                "duplicate option ID: {option_id}"
             )));
         }
+        options.push(Nip88PollOption {
+            id: option_id,
+            text: label,
+        });
     }
 
-    let mut tags = Vec::new();
-
-    for option in &args.options {
-        tags.push(
-            Tag::parse(&[
-                "option".to_string(),
-                option.option_id.clone(),
-                option.label.clone(),
-            ])
-            .map_err(|e| CoreError::Nostr(format!("option tag: {e}")))?,
-        );
-    }
-
-    for relay_url in &args.relay_urls {
-        tags.push(
-            Tag::parse(&["relay".to_string(), relay_url.clone()])
-                .map_err(|e| CoreError::Nostr(format!("relay tag: {e}")))?,
-        );
-    }
-
-    let poll_type = args.poll_type.as_deref().unwrap_or("singlechoice");
-    tags.push(
-        Tag::parse(&["polltype".to_string(), poll_type.to_string()])
-            .map_err(|e| CoreError::Nostr(format!("poll type tag: {e}")))?,
-    );
-
-    if let Some(ends_at) = args.ends_at {
-        tags.push(
-            Tag::parse(&["endsAt".to_string(), ends_at.to_string()])
-                .map_err(|e| CoreError::Nostr(format!("endsAt tag: {e}")))?,
-        );
-    }
-
-    let mut builder = EventBuilder::new(Kind::from(1068), args.question).tags(tags);
+    let relays = parse_relays(&args.relay_urls)?;
+    let poll_type = parse_poll_type(args.poll_type.as_deref())?;
+    let mut builder = EventBuilder::poll(Poll {
+        title: question,
+        r#type: poll_type,
+        options,
+        relays,
+        ends_at: args.ends_at.map(Timestamp::from_secs),
+    });
 
     if let Some(pow) = args.pow {
         builder = builder.pow(pow);
@@ -126,25 +109,24 @@ pub async fn vote_poll(client: &Client, args: VotePollArgs) -> Result<SendResult
         ));
     }
 
-    let poll_event_id = EventId::from_hex(&args.poll_event_id).map_err(|e| {
+    let poll_event_id = EventId::parse(args.poll_event_id.trim()).map_err(|e| {
         CoreError::invalid_input(format!("invalid event id {}: {e}", args.poll_event_id))
     })?;
+    let option_ids = normalize_vote_option_ids(&args.option_ids)?;
 
-    let mut tags = Vec::new();
+    let response = if option_ids.len() == 1 {
+        PollResponse::SingleChoice {
+            poll_id: poll_event_id,
+            response: option_ids[0].clone(),
+        }
+    } else {
+        PollResponse::MultipleChoice {
+            poll_id: poll_event_id,
+            responses: option_ids,
+        }
+    };
 
-    tags.push(
-        Tag::parse(&["e".to_string(), poll_event_id.to_hex()])
-            .map_err(|e| CoreError::Nostr(format!("poll event tag: {e}")))?,
-    );
-
-    for option_id in &args.option_ids {
-        tags.push(
-            Tag::parse(&["response".to_string(), option_id.clone()])
-                .map_err(|e| CoreError::Nostr(format!("response tag: {e}")))?,
-        );
-    }
-
-    let mut builder = EventBuilder::new(Kind::from(1018), "").tags(tags);
+    let mut builder = EventBuilder::poll_response(response);
 
     if let Some(pow) = args.pow {
         builder = builder.pow(pow);
@@ -158,9 +140,8 @@ pub async fn get_poll_results(
     poll_event_id: &str,
     timeout_secs: u64,
 ) -> Result<PollResults, CoreError> {
-    let poll_id = EventId::from_hex(poll_event_id).map_err(|e| {
-        CoreError::invalid_input(format!("invalid event id {poll_event_id}: {e}"))
-    })?;
+    let poll_id = EventId::parse(poll_event_id.trim())
+        .map_err(|e| CoreError::invalid_input(format!("invalid event id {poll_event_id}: {e}")))?;
 
     let poll_filter = Filter::new().id(poll_id).kind(Kind::from(1068)).limit(1);
 
@@ -174,7 +155,8 @@ pub async fn get_poll_results(
         .next()
         .ok_or_else(|| CoreError::invalid_input("poll not found".to_string()))?;
 
-    let parsed = parse_poll_tags(&poll_event.tags);
+    let poll = Poll::from_event(poll_event)
+        .map_err(|e| CoreError::invalid_input(format!("invalid poll event: {e}")))?;
 
     let vote_filter = Filter::new()
         .kind(Kind::from(1018))
@@ -185,14 +167,25 @@ pub async fn get_poll_results(
         .await
         .map_err(|e| CoreError::Nostr(format!("fetch votes: {e}")))?;
 
-    let (vote_counts, total_votes) =
-        tally_votes(vote_events.iter(), &parsed.options, parsed.ends_at);
+    let options_map: HashMap<String, String> = poll
+        .options
+        .iter()
+        .map(|option| (option.id.clone(), option.text.clone()))
+        .collect();
+
+    let (vote_counts, total_votes) = tally_votes(
+        vote_events.iter(),
+        &options_map,
+        poll.r#type,
+        poll.ends_at.map(|value| value.as_secs()),
+    );
 
     let now = Timestamp::now().as_secs();
-    let ended = parsed.ends_at.map_or(false, |end_time| now > end_time);
+    let ended = poll
+        .ends_at
+        .is_some_and(|end_time| now > end_time.as_secs());
 
-    let mut options: Vec<PollResultOption> = parsed
-        .options
+    let mut options: Vec<PollResultOption> = options_map
         .into_iter()
         .map(|(option_id, label)| PollResultOption {
             option_id: option_id.clone(),
@@ -205,52 +198,65 @@ pub async fn get_poll_results(
 
     Ok(PollResults {
         poll_id: poll_event_id.to_string(),
-        question: poll_event.content.clone(),
-        poll_type: parsed.poll_type,
+        question: poll.title,
+        poll_type: poll.r#type.to_string(),
         total_votes,
         options,
         ended,
-        ends_at: parsed.ends_at,
+        ends_at: poll.ends_at.map(|value| value.as_secs()),
     })
 }
 
-fn parse_poll_tags(tags: &Tags) -> PollParsed {
-    let mut options_map: HashMap<String, String> = HashMap::new();
-    let mut poll_type = "singlechoice".to_string();
-    let mut ends_at = None;
-
-    for tag in tags.iter() {
-        let tag_vec = tag.clone().to_vec();
-        if tag_vec.is_empty() {
-            continue;
-        }
-
-        match tag_vec[0].as_str() {
-            "option" if tag_vec.len() >= 3 => {
-                options_map.insert(tag_vec[1].clone(), tag_vec[2].clone());
-            }
-            "polltype" if tag_vec.len() >= 2 => {
-                poll_type = tag_vec[1].clone();
-            }
-            "endsAt" if tag_vec.len() >= 2 => {
-                if let Ok(timestamp) = tag_vec[1].parse::<u64>() {
-                    ends_at = Some(timestamp);
-                }
-            }
-            _ => {}
-        }
+fn ensure_non_empty(field: &str, value: &str) -> Result<String, CoreError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(CoreError::invalid_input(format!(
+            "{field} must not be empty"
+        )));
     }
+    Ok(trimmed.to_string())
+}
 
-    PollParsed {
-        options: options_map,
-        poll_type,
-        ends_at,
+fn ensure_option_id(value: &str) -> Result<String, CoreError> {
+    let trimmed = ensure_non_empty("option_id", value)?;
+    if !trimmed.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        return Err(CoreError::invalid_input(
+            "option_id must be alphanumeric".to_string(),
+        ));
     }
+    Ok(trimmed)
+}
+
+fn parse_poll_type(value: Option<&str>) -> Result<PollType, CoreError> {
+    match value {
+        Some(value) => PollType::from_str(value.trim())
+            .map_err(|e| CoreError::invalid_input(format!("invalid poll_type: {e}"))),
+        None => Ok(PollType::SingleChoice),
+    }
+}
+
+fn parse_relays(values: &[String]) -> Result<Vec<RelayUrl>, CoreError> {
+    let mut relays = Vec::with_capacity(values.len());
+    for value in values {
+        let relay = RelayUrl::parse(ensure_non_empty("relay url", value)?.as_str())
+            .map_err(|e| CoreError::invalid_input(format!("invalid relay url: {e}")))?;
+        relays.push(relay);
+    }
+    Ok(relays)
+}
+
+fn normalize_vote_option_ids(values: &[String]) -> Result<Vec<String>, CoreError> {
+    let mut normalized = Vec::with_capacity(values.len());
+    for value in values {
+        normalized.push(ensure_option_id(value)?);
+    }
+    Ok(normalized)
 }
 
 fn tally_votes<'a, I>(
     vote_events: I,
     options_map: &HashMap<String, String>,
+    poll_type: PollType,
     ends_at: Option<u64>,
 ) -> (HashMap<String, u64>, u64)
 where
@@ -291,46 +297,58 @@ where
         votes_by_pubkey.insert(pubkey, (vote_time, selected_options));
     }
 
-    for (_, (_time, selected_options)) in votes_by_pubkey.iter() {
-        for option_id in selected_options {
-            if options_map.contains_key(option_id) {
-                *vote_counts.entry(option_id.clone()).or_insert(0) += 1;
-            }
+    let mut total_votes = 0;
+    for (_time, selected_options) in votes_by_pubkey.values() {
+        let normalized = normalize_selected_options(selected_options, options_map, poll_type);
+        if normalized.is_empty() {
+            continue;
+        }
+
+        total_votes += 1;
+        for option_id in normalized {
+            *vote_counts.entry(option_id).or_insert(0) += 1;
         }
     }
-
-    let total_votes = votes_by_pubkey.len() as u64;
 
     (vote_counts, total_votes)
 }
 
+fn normalize_selected_options(
+    selected_options: &[String],
+    options_map: &HashMap<String, String>,
+    poll_type: PollType,
+) -> Vec<String> {
+    match poll_type {
+        PollType::SingleChoice => selected_options
+            .iter()
+            .find(|option_id| options_map.contains_key(option_id.as_str()))
+            .cloned()
+            .into_iter()
+            .collect(),
+        PollType::MultipleChoice => {
+            let mut seen = HashSet::new();
+            let mut normalized = Vec::new();
+            for option_id in selected_options {
+                if options_map.contains_key(option_id.as_str()) && seen.insert(option_id.clone()) {
+                    normalized.push(option_id.clone());
+                }
+            }
+            normalized
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_poll_tags, tally_votes};
+    use super::{normalize_selected_options, parse_poll_type, tally_votes};
+    use nostr::nips::nip88::PollType;
     use nostr_sdk::prelude::*;
     use std::collections::HashMap;
 
     #[test]
-    fn poll_tags_extract_fields() {
-        let tags = vec![
-            Tag::parse(&["option".to_string(), "a".to_string(), "Alpha".to_string()]).unwrap(),
-            Tag::parse(&["option".to_string(), "b".to_string(), "Beta".to_string()]).unwrap(),
-            Tag::parse(&["relay".to_string(), "wss://relay.example".to_string()]).unwrap(),
-            Tag::parse(&["polltype".to_string(), "multiplechoice".to_string()]).unwrap(),
-            Tag::parse(&["endsAt".to_string(), "123".to_string()]).unwrap(),
-        ];
-        let event = EventBuilder::new(Kind::from(1068), "question")
-            .tags(tags)
-            .custom_created_at(Timestamp::from_secs(1))
-            .sign_with_keys(&Keys::generate())
-            .unwrap();
-
-        let parsed = parse_poll_tags(&event.tags);
-
-        assert_eq!(parsed.poll_type, "multiplechoice");
-        assert_eq!(parsed.ends_at, Some(123));
-        assert_eq!(parsed.options.get("a"), Some(&"Alpha".to_string()));
-        assert_eq!(parsed.options.get("b"), Some(&"Beta".to_string()));
+    fn parse_poll_type_defaults_to_single_choice() {
+        let poll_type = parse_poll_type(None).unwrap();
+        assert_eq!(poll_type, PollType::SingleChoice);
     }
 
     #[test]
@@ -345,11 +363,46 @@ mod tests {
         let late_vote = build_vote_event(&Keys::generate(), 300, vec!["a".to_string()]);
 
         let votes = vec![vote_a.clone(), vote_b.clone(), late_vote];
-        let (counts, total_votes) = tally_votes(votes.iter(), &options_map, Some(250));
+        let (counts, total_votes) = tally_votes(
+            votes.iter(),
+            &options_map,
+            PollType::SingleChoice,
+            Some(250),
+        );
 
         assert_eq!(total_votes, 1);
         assert_eq!(*counts.get("a").unwrap_or(&0), 0);
         assert_eq!(*counts.get("b").unwrap_or(&0), 1);
+    }
+
+    #[test]
+    fn single_choice_counts_only_first_valid_response() {
+        let mut options_map: HashMap<String, String> = HashMap::new();
+        options_map.insert("a".to_string(), "Alpha".to_string());
+        options_map.insert("b".to_string(), "Beta".to_string());
+
+        let normalized = normalize_selected_options(
+            &["b".to_string(), "a".to_string()],
+            &options_map,
+            PollType::SingleChoice,
+        );
+
+        assert_eq!(normalized, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn multiple_choice_deduplicates_responses() {
+        let mut options_map: HashMap<String, String> = HashMap::new();
+        options_map.insert("a".to_string(), "Alpha".to_string());
+        options_map.insert("b".to_string(), "Beta".to_string());
+
+        let normalized = normalize_selected_options(
+            &["a".to_string(), "a".to_string(), "b".to_string()],
+            &options_map,
+            PollType::MultipleChoice,
+        );
+
+        assert_eq!(normalized, vec!["a".to_string(), "b".to_string()]);
     }
 
     fn build_vote_event(keys: &Keys, created_at: u64, responses: Vec<String>) -> Event {
