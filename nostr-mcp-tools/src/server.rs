@@ -1276,7 +1276,7 @@ impl NostrMcpServer {
         let target_pubkey = if let Some(label) = args.label {
             let keys = ks.list().await;
             let entry = keys.iter().find(|k| k.label == label).ok_or_else(|| {
-                ErrorData::invalid_params(format!("key with label '{}' not found", label), None)
+                ErrorData::invalid_params(format!("key with label '{label}' not found"), None)
             })?;
             PublicKey::from_bech32(&entry.public_key).map_err(invalid_params)?
         } else {
@@ -1561,6 +1561,12 @@ impl NostrMcpServer {
             "result": result
         }))?;
         Ok(CallToolResult::success(vec![content]))
+    }
+}
+
+impl Default for NostrMcpServer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
