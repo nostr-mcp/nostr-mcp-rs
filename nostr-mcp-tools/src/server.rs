@@ -4,6 +4,7 @@ mod follows;
 mod groups;
 mod keys;
 mod metadata;
+mod protocol_publishing;
 mod protocol_utils;
 mod relays;
 
@@ -12,13 +13,6 @@ use crate::util;
 use nostr_mcp_core::client::{ActiveClient, ClientStore};
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::key_store::KeyStore;
-use nostr_mcp_core::nip58::{
-    post_badge_award, post_badge_definition, post_profile_badges, Nip58BadgeAwardArgs,
-    Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
-};
-use nostr_mcp_core::nip89::{
-    post_handler_info, post_recommendation, Nip89HandlerInfoArgs, Nip89RecommendArgs,
-};
 #[cfg(not(feature = "keyring"))]
 use nostr_mcp_core::secrets::InMemorySecretStore;
 #[cfg(feature = "keyring")]
@@ -26,12 +20,9 @@ use nostr_mcp_core::secrets::KeyringSecretStore;
 use nostr_mcp_core::secrets::SecretStore;
 use nostr_mcp_core::settings::SettingsStore;
 use rmcp::{
-    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{
-        CallToolResult, Content, ErrorData, Implementation, ProtocolVersion, ServerCapabilities,
-        ServerInfo,
-    },
-    tool, tool_handler, tool_router,
+    handler::server::router::tool::ToolRouter,
+    model::{ErrorData, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
+    tool_handler, tool_router,
     transport::stdio,
     ServerHandler, ServiceExt,
 };
@@ -179,95 +170,11 @@ impl NostrMcpServer {
                 + Self::group_tool_router()
                 + Self::key_tool_router()
                 + Self::relay_tool_router()
+                + Self::protocol_publishing_tool_router()
                 + Self::protocol_utility_tool_router()
                 + Self::metadata_tool_router(),
             context: Arc::new(ServerContext::new(runtime)),
         }
-    }
-
-    #[tool(
-        description = "Publish a NIP-89 handler recommendation (kind 31989). Optional: pow (u8), to_relays (urls)."
-    )]
-    pub async fn nostr_handlers_recommend(
-        &self,
-        Parameters(args): Parameters<Nip89RecommendArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let result = post_recommendation(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Publish a NIP-89 handler information event (kind 31990). Optional: pow (u8), to_relays (urls)."
-    )]
-    pub async fn nostr_handlers_register(
-        &self,
-        Parameters(args): Parameters<Nip89HandlerInfoArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let result = post_handler_info(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Publish a NIP-58 badge definition (kind 30009). Optional: pow (u8), to_relays (urls)."
-    )]
-    pub async fn nostr_badges_define(
-        &self,
-        Parameters(args): Parameters<Nip58BadgeDefinitionArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let result = post_badge_definition(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Publish a NIP-58 badge award (kind 8). Optional: pow (u8), to_relays (urls)."
-    )]
-    pub async fn nostr_badges_award(
-        &self,
-        Parameters(args): Parameters<Nip58BadgeAwardArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let result = post_badge_award(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Publish a NIP-58 profile badges event (kind 30008). Optional: pow (u8), to_relays (urls)."
-    )]
-    pub async fn nostr_badges_set_profile(
-        &self,
-        Parameters(args): Parameters<Nip58ProfileBadgesArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let result = post_profile_badges(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
     }
 }
 
