@@ -1,60 +1,61 @@
 use crate::runtime::{NostrMcpPaths, NostrMcpRuntime};
 use crate::util;
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::client::{ensure_client, reset_cached_client};
+use nostr_mcp_core::client::{ActiveClient, ClientStore};
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::events::{
-    EventsListArgs, LongFormListArgs, QueryEventsArgs, SearchEventsArgs, list_events,
-    list_long_form_events, query_events, search_events, subscription_targets_mentions_me,
-    subscription_targets_my_metadata, subscription_targets_my_notes,
+    list_events, list_long_form_events, query_events, search_events,
+    subscription_targets_mentions_me, subscription_targets_my_metadata,
+    subscription_targets_my_notes, EventsListArgs, LongFormListArgs, QueryEventsArgs,
+    SearchEventsArgs,
 };
 use nostr_mcp_core::follows::{
-    AddFollowArgs, PublishFollowsResult, RemoveFollowArgs, SetFollowsArgs, fetch_follows,
-    publish_follows,
+    fetch_follows, publish_follows, AddFollowArgs, PublishFollowsResult, RemoveFollowArgs,
+    SetFollowsArgs,
 };
 use nostr_mcp_core::groups::{
-    CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
-    JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs, create_group, create_invite,
-    delete_group, delete_group_event, edit_group_metadata, join_group, leave_group, put_user,
-    remove_user,
+    create_group, create_invite, delete_group, delete_group_event, edit_group_metadata, join_group,
+    leave_group, put_user, remove_user, CreateGroupArgs, CreateInviteArgs, DeleteEventArgs,
+    DeleteGroupArgs, EditGroupMetadataArgs, JoinGroupArgs, LeaveGroupArgs, PutUserArgs,
+    RemoveUserArgs,
 };
 use nostr_mcp_core::key_store::{
     EmptyArgs, ExportArgs, GenerateArgs, ImportArgs, KeyStore, RemoveArgs, RenameLabelArgs,
     SetActiveArgs,
 };
-use nostr_mcp_core::keys::{DerivePublicArgs, VerifyArgs, derive_public, verify_key};
+use nostr_mcp_core::keys::{derive_public, verify_key, DerivePublicArgs, VerifyArgs};
 use nostr_mcp_core::metadata::{
-    FetchMetadataArgs, MetadataResult, ProfileGetArgs, SetMetadataArgs, args_to_profile,
-    fetch_metadata, fetch_profile, publish_metadata,
+    args_to_profile, fetch_metadata, fetch_profile, publish_metadata, FetchMetadataArgs,
+    MetadataResult, ProfileGetArgs, SetMetadataArgs,
 };
 use nostr_mcp_core::nip01;
-use nostr_mcp_core::nip05::{Nip05ResolveArgs, Nip05VerifyArgs, resolve_nip05, verify_nip05};
-use nostr_mcp_core::nip30::{Nip30ParseArgs, parse_nip30_emojis};
-use nostr_mcp_core::nip44::{Nip44DecryptArgs, Nip44EncryptArgs, decrypt_nip44, encrypt_nip44};
+use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05, Nip05ResolveArgs, Nip05VerifyArgs};
+use nostr_mcp_core::nip30::{parse_nip30_emojis, Nip30ParseArgs};
+use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44, Nip44DecryptArgs, Nip44EncryptArgs};
 use nostr_mcp_core::nip58::{
-    Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs, post_badge_award,
-    post_badge_definition, post_profile_badges,
+    post_badge_award, post_badge_definition, post_profile_badges, Nip58BadgeAwardArgs,
+    Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
 };
 use nostr_mcp_core::nip89::{
-    Nip89HandlerInfoArgs, Nip89RecommendArgs, post_handler_info, post_recommendation,
+    post_handler_info, post_recommendation, Nip89HandlerInfoArgs, Nip89RecommendArgs,
 };
 use nostr_mcp_core::polls::{
-    CreatePollArgs, GetPollResultsArgs, VotePollArgs, create_poll, get_poll_results, vote_poll,
+    create_poll, get_poll_results, vote_poll, CreatePollArgs, GetPollResultsArgs, VotePollArgs,
 };
 use nostr_mcp_core::publish::{
-    CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
-    PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
-    SignEventArgs, create_text_event, delete_events, post_anonymous_note, post_group_chat,
-    post_long_form, post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
-    sign_unsigned_event,
+    create_text_event, delete_events, post_anonymous_note, post_group_chat, post_long_form,
+    post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
+    sign_unsigned_event, CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs,
+    PostLongFormArgs, PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs,
+    PublishSignedEventArgs, SignEventArgs,
 };
-use nostr_mcp_core::references::{ParseReferencesArgs, parse_text_references};
-use nostr_mcp_core::relay_info::{RelayInfoArgs, fetch_relay_info};
+use nostr_mcp_core::references::{parse_text_references, ParseReferencesArgs};
+use nostr_mcp_core::relay_info::{fetch_relay_info, RelayInfoArgs};
 use nostr_mcp_core::relays::{
-    RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs, connect_relays, disconnect_relays,
-    get_relay_urls, list_relays, set_relays, status_summary,
+    connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
+    RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs,
 };
-use nostr_mcp_core::replies::{PostCommentArgs, PostReplyArgs, post_comment, post_reply};
+use nostr_mcp_core::replies::{post_comment, post_reply, PostCommentArgs, PostReplyArgs};
 #[cfg(not(feature = "keyring"))]
 use nostr_mcp_core::secrets::InMemorySecretStore;
 #[cfg(feature = "keyring")]
@@ -63,7 +64,6 @@ use nostr_mcp_core::secrets::SecretStore;
 use nostr_mcp_core::settings::{FollowEntry, KeySettings, SettingsStore};
 use nostr_sdk::prelude::*;
 use rmcp::{
-    ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
         CallToolResult, Content, ErrorData, Implementation, ProtocolVersion, ServerCapabilities,
@@ -71,39 +71,21 @@ use rmcp::{
     },
     tool, tool_handler, tool_router,
     transport::stdio,
+    ServerHandler, ServiceExt,
 };
 use std::sync::Arc;
-use tokio::sync::{OnceCell, RwLock};
-use tokio::time::{Duration, sleep};
+use tokio::sync::OnceCell;
+use tokio::time::{sleep, Duration};
 use tracing::info;
 
-static KEYSTORE: OnceCell<RwLock<Arc<KeyStore>>> = OnceCell::const_new();
-static SETTINGS_STORE: OnceCell<RwLock<Arc<SettingsStore>>> = OnceCell::const_new();
-static RUNTIME: OnceCell<RwLock<NostrMcpRuntime>> = OnceCell::const_new();
-
-async fn runtime_cell() -> &'static RwLock<NostrMcpRuntime> {
-    RUNTIME
-        .get_or_init(|| async { RwLock::new(NostrMcpRuntime::default()) })
-        .await
-}
-
-async fn runtime() -> NostrMcpRuntime {
-    runtime_cell().await.read().await.clone()
-}
-
-async fn set_runtime(runtime: NostrMcpRuntime) {
-    let cell = runtime_cell().await;
-    let mut current = cell.write().await;
-    *current = runtime;
-}
-
-fn secret_store(_runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
+fn secret_store(runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
     #[cfg(feature = "keyring")]
     {
-        Arc::new(KeyringSecretStore::new(&_runtime.keyring_service))
+        Arc::new(KeyringSecretStore::new(&runtime.keyring_service))
     }
     #[cfg(not(feature = "keyring"))]
     {
+        let _ = runtime;
         Arc::new(InMemorySecretStore::new())
     }
 }
@@ -136,80 +118,100 @@ fn invalid_params<E: ToString>(err: E) -> ErrorData {
     ErrorData::invalid_params(err.to_string(), None)
 }
 
-async fn refresh_keystore(runtime: &NostrMcpRuntime) -> Result<(), CoreError> {
-    let new_store = Arc::new(load_or_init_keystore(&runtime.paths, runtime).await?);
-    let initial_store = new_store.clone();
-    let cell = KEYSTORE
-        .get_or_try_init(|| async {
-            Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(initial_store))
-        })
-        .await?;
-    let mut w = cell.write().await;
-    *w = new_store;
-    Ok(())
+struct ServerStores {
+    keystore: Arc<KeyStore>,
+    settings_store: Arc<SettingsStore>,
 }
 
-async fn refresh_settings_store(runtime: &NostrMcpRuntime) -> Result<(), CoreError> {
-    let new_store = Arc::new(load_or_init_settings(&runtime.paths).await?);
-    let initial_store = new_store.clone();
-    let cell = SETTINGS_STORE
-        .get_or_try_init(|| async {
-            Ok::<RwLock<Arc<SettingsStore>>, CoreError>(RwLock::new(initial_store))
-        })
-        .await?;
-    let mut w = cell.write().await;
-    *w = new_store;
-    Ok(())
+struct ServerContext {
+    runtime: NostrMcpRuntime,
+    stores: OnceCell<ServerStores>,
+    client_store: ClientStore,
 }
 
-pub async fn configure_runtime(runtime: NostrMcpRuntime) -> Result<(), CoreError> {
-    set_runtime(runtime.clone()).await;
-    refresh_keystore(&runtime).await?;
-    refresh_settings_store(&runtime).await?;
-    reset_cached_client().await?;
-    Ok(())
+impl ServerContext {
+    fn new(runtime: NostrMcpRuntime) -> Self {
+        Self {
+            runtime,
+            stores: OnceCell::const_new(),
+            client_store: ClientStore::new(),
+        }
+    }
+
+    async fn stores(&self) -> Result<&ServerStores, CoreError> {
+        let runtime = self.runtime.clone();
+        self.stores
+            .get_or_try_init(move || {
+                let runtime = runtime.clone();
+                async move {
+                    let keystore = Arc::new(load_or_init_keystore(&runtime.paths, &runtime).await?);
+                    let settings_store = Arc::new(load_or_init_settings(&runtime.paths).await?);
+                    Ok(ServerStores {
+                        keystore,
+                        settings_store,
+                    })
+                }
+            })
+            .await
+    }
 }
 
 #[derive(Clone)]
 pub struct NostrMcpServer {
     tool_router: ToolRouter<Self>,
+    context: Arc<ServerContext>,
 }
 
 impl NostrMcpServer {
-    async fn keystore() -> Result<Arc<KeyStore>, ErrorData> {
-        let runtime = runtime().await;
-        let init_runtime = runtime.clone();
-        let cell = KEYSTORE
-            .get_or_try_init(move || async move {
-                let ks = load_or_init_keystore(&init_runtime.paths, &init_runtime).await?;
-                Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(Arc::new(ks)))
-            })
-            .await
-            .map_err(core_error)?;
-        let guard = cell.read().await;
-        Ok(guard.clone())
+    async fn initialize(&self) -> Result<(), CoreError> {
+        self.context.stores().await?;
+        Ok(())
     }
 
-    async fn settings_store() -> Result<Arc<SettingsStore>, ErrorData> {
-        let runtime = runtime().await;
-        let init_paths = runtime.paths.clone();
-        let cell = SETTINGS_STORE
-            .get_or_try_init(move || async move {
-                let ss = load_or_init_settings(&init_paths).await?;
-                Ok::<RwLock<Arc<SettingsStore>>, CoreError>(RwLock::new(Arc::new(ss)))
-            })
+    async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
+        let stores = self.context.stores().await.map_err(core_error)?;
+        Ok(stores.keystore.clone())
+    }
+
+    async fn settings_store(&self) -> Result<Arc<SettingsStore>, ErrorData> {
+        let stores = self.context.stores().await.map_err(core_error)?;
+        Ok(stores.settings_store.clone())
+    }
+
+    async fn ensure_client_from(
+        &self,
+        keystore: Arc<KeyStore>,
+        settings_store: Arc<SettingsStore>,
+    ) -> Result<ActiveClient, ErrorData> {
+        self.context
+            .client_store
+            .ensure_client(keystore, settings_store)
             .await
-            .map_err(core_error)?;
-        let guard = cell.read().await;
-        Ok(guard.clone())
+            .map_err(core_error)
+    }
+
+    async fn reset_client(&self) -> Result<(), ErrorData> {
+        self.context.client_store.reset().await.map_err(core_error)
+    }
+
+    #[cfg(test)]
+    async fn client(&self) -> Result<ActiveClient, ErrorData> {
+        let stores = self.context.stores().await.map_err(core_error)?;
+        self.ensure_client_from(stores.keystore.clone(), stores.settings_store.clone())
+            .await
     }
 }
 
 #[tool_router]
 impl NostrMcpServer {
     pub fn new() -> Self {
+        Self::with_runtime(NostrMcpRuntime::default())
+    }
+
+    pub fn with_runtime(runtime: NostrMcpRuntime) -> Self {
         Self {
             tool_router: Self::tool_router(),
+            context: Arc::new(ServerContext::new(runtime)),
         }
     }
 
@@ -218,7 +220,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<GenerateArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let entry = ks
             .generate(
                 args.label,
@@ -227,7 +229,7 @@ impl NostrMcpServer {
             )
             .await
             .map_err(core_error)?;
-        reset_cached_client().await.map_err(core_error)?;
+        self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -239,7 +241,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ImportArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let entry = ks
             .import_secret(
                 args.label,
@@ -249,7 +251,7 @@ impl NostrMcpServer {
             )
             .await
             .map_err(core_error)?;
-        reset_cached_client().await.map_err(core_error)?;
+        self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -259,9 +261,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let removed = ks.remove(args.label).await.map_err(core_error)?;
-        reset_cached_client().await.map_err(core_error)?;
+        self.reset_client().await?;
         let content = Content::json(serde_json::json!({ "removed": removed.is_some() }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -271,7 +273,7 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let keys = ks.list().await;
         let active_label = ks.get_active().await.map(|k| k.label);
         let payload =
@@ -285,9 +287,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetActiveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let entry = ks.set_active(args.label).await.map_err(core_error)?;
-        reset_cached_client().await.map_err(core_error)?;
+        self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -297,7 +299,7 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let active = ks.get_active().await;
         let content = Content::json(serde_json::json!(active))?;
         Ok(CallToolResult::success(vec![content]))
@@ -308,7 +310,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RenameLabelArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let source = match args.from {
             Some(f) => f,
             None => ks
@@ -318,7 +320,7 @@ impl NostrMcpServer {
                 .ok_or_else(|| ErrorData::invalid_params("no active key to rename", None))?,
         };
         let entry = ks.rename_label(source, args.to).await.map_err(core_error)?;
-        reset_cached_client().await.map_err(core_error)?;
+        self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -330,7 +332,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ExportArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let result = ks
             .export_key(args.label, args.format, args.include_private)
             .await
@@ -370,9 +372,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysSetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         set_relays(&ac.client, args).await.map_err(core_error)?;
 
         let relay_urls = get_relay_urls(&ac.client).await;
@@ -402,9 +404,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysConnectArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         connect_relays(&ac.client, args).await.map_err(core_error)?;
         let rows = list_relays(&ac.client).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!({ "relays": rows }))?;
@@ -418,9 +420,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysDisconnectArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         disconnect_relays(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -450,9 +452,9 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let rows = list_relays(&ac.client).await.map_err(core_error)?;
         let summary = status_summary(&ac.client).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!({ "summary": summary, "relays": rows }))?;
@@ -522,9 +524,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip89RecommendArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_recommendation(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -539,9 +541,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip89HandlerInfoArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_handler_info(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -556,9 +558,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58BadgeDefinitionArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_badge_definition(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -573,9 +575,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58BadgeAwardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_badge_award(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -590,9 +592,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58ProfileBadgesArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_profile_badges(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -619,9 +621,9 @@ impl NostrMcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         nip01::validate_time_bounds(args.since, args.until).map_err(core_error)?;
         nip01::validate_limit(args.limit).map_err(core_error)?;
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
 
         let since_ts = args.since.map(Timestamp::from);
         let until_ts = args.until.map(Timestamp::from);
@@ -704,9 +706,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<LongFormListArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let events = list_long_form_events(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -746,9 +748,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<QueryEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let events = query_events(&ac.client, args).await.map_err(core_error)?;
         let items: Vec<serde_json::Value> = events
             .into_iter()
@@ -774,9 +776,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SearchEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let events = search_events(&ac.client, args).await.map_err(core_error)?;
         let items: Vec<serde_json::Value> = events
             .into_iter()
@@ -802,7 +804,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateTextArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
+        let ks = self.keystore().await?;
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
         })?;
@@ -820,9 +822,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SignEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let signer = ac
             .client
             .signer()
@@ -843,9 +845,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostTextArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_text_note(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -858,9 +860,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostAnonymousArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let result = post_anonymous_note(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -875,9 +877,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostRepostArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_repost(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -890,9 +892,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = delete_events(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -905,9 +907,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostThreadArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_thread(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -920,9 +922,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostLongFormArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_long_form(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -935,9 +937,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostGroupChatArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_group_chat(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -952,9 +954,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostReactionArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_reaction(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -967,9 +969,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PublishSignedEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
         let result = publish_signed_event(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -984,9 +986,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostReplyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_reply(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -999,9 +1001,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostCommentArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = post_comment(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1014,9 +1016,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreatePollArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = create_poll(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1029,9 +1031,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<VotePollArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = vote_poll(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1044,9 +1046,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<GetPollResultsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let results = get_poll_results(
             &ac.client,
             &args.poll_event_id,
@@ -1065,9 +1067,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PutUserArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = put_user(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1080,9 +1082,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveUserArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = remove_user(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1095,9 +1097,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<EditGroupMetadataArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = edit_group_metadata(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -1112,9 +1114,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = delete_group_event(&ac.client, args)
             .await
             .map_err(core_error)?;
@@ -1129,9 +1131,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = create_group(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1144,9 +1146,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = delete_group(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1159,9 +1161,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateInviteArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = create_invite(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1174,9 +1176,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<JoinGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = join_group(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1189,9 +1191,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<LeaveGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
         let result = leave_group(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -1204,8 +1206,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetMetadataArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1232,7 +1234,7 @@ impl NostrMcpServer {
             .map_err(core_error)?;
 
         let result = if args.publish.unwrap_or(true) {
-            let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+            let ac = self.ensure_client_from(ks, ss).await?;
             publish_metadata(&ac.client, &profile)
                 .await
                 .map_err(core_error)?
@@ -1256,8 +1258,8 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1281,9 +1283,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<FetchMetadataArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks.clone(), ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks.clone(), ss).await?;
 
         let target_pubkey = if let Some(label) = args.label {
             let keys = ks.list().await;
@@ -1313,9 +1315,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ProfileGetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss).await?;
 
         let result = fetch_profile(&ac.client, args).await.map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -1329,8 +1331,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetFollowsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1352,7 +1354,7 @@ impl NostrMcpServer {
             .map_err(core_error)?;
 
         let result = if args.publish.unwrap_or(true) {
-            let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+            let ac = self.ensure_client_from(ks, ss).await?;
             publish_follows(&ac.client, &args.follows)
                 .await
                 .map_err(core_error)?
@@ -1376,8 +1378,8 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1406,9 +1408,9 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
-        let ac = ensure_client(ks, ss.clone()).await.map_err(core_error)?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
+        let ac = self.ensure_client_from(ks, ss.clone()).await?;
 
         let follows = fetch_follows(&ac.client, &ac.active_pubkey)
             .await
@@ -1443,8 +1445,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<AddFollowArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1484,7 +1486,7 @@ impl NostrMcpServer {
             .map_err(core_error)?;
 
         let result = if args.publish.unwrap_or(true) {
-            let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+            let ac = self.ensure_client_from(ks, ss).await?;
             publish_follows(&ac.client, &follows)
                 .await
                 .map_err(core_error)?
@@ -1514,8 +1516,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveFollowArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ks = Self::keystore().await?;
-        let ss = Self::settings_store().await?;
+        let ks = self.keystore().await?;
+        let ss = self.settings_store().await?;
 
         let active = ks.get_active().await.ok_or_else(|| {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
@@ -1552,7 +1554,7 @@ impl NostrMcpServer {
             .map_err(core_error)?;
 
         let result = if args.publish.unwrap_or(true) {
-            let ac = ensure_client(ks, ss).await.map_err(core_error)?;
+            let ac = self.ensure_client_from(ks, ss).await?;
             publish_follows(&ac.client, &follows)
                 .await
                 .map_err(core_error)?
@@ -1600,7 +1602,7 @@ impl ServerHandler for NostrMcpServer {
 async fn wait_for_shutdown() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{SignalKind, signal};
+        use tokio::signal::unix::{signal, SignalKind};
         let mut term = signal(SignalKind::terminate()).expect("signal");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
@@ -1621,11 +1623,12 @@ pub async fn start_stdio_server() -> anyhow::Result<()> {
 pub async fn start_stdio_server_with_runtime(
     runtime_config: NostrMcpRuntime,
 ) -> anyhow::Result<()> {
-    configure_runtime(runtime_config).await?;
-    let server_name = runtime().await.server_name;
+    let server_name = runtime_config.server_name.clone();
+    let server = NostrMcpServer::with_runtime(runtime_config);
+    server.initialize().await?;
     info!("starting {server_name} MCP server (stdio)");
     loop {
-        let service = NostrMcpServer::new().serve(stdio()).await?;
+        let service = server.clone().serve(stdio()).await?;
         info!("server ready (stdio)");
         tokio::select! {
             _ = service.waiting() => {
@@ -1644,10 +1647,12 @@ pub async fn start_stdio_server_with_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::NostrMcpServer;
+    use super::{NostrMcpRuntime, NostrMcpServer};
     use rmcp::ServerHandler;
     use serde::Deserialize;
     use std::path::PathBuf;
+    use std::sync::Arc;
+    use tempfile::tempdir;
 
     #[derive(Deserialize)]
     struct ToolRegistry {
@@ -1710,5 +1715,62 @@ mod tests {
         let server = NostrMcpServer::new();
         let info = ServerHandler::get_info(&server);
         assert!(info.capabilities.tools.is_some());
+    }
+
+    #[tokio::test]
+    async fn server_state_is_scoped_per_instance() {
+        let dir_a = tempdir().unwrap();
+        let dir_b = tempdir().unwrap();
+        let server_a = NostrMcpServer::with_runtime(NostrMcpRuntime::new(
+            "nostr-a",
+            "service-a",
+            dir_a.path().to_path_buf(),
+        ));
+        let server_b = NostrMcpServer::with_runtime(NostrMcpRuntime::new(
+            "nostr-b",
+            "service-b",
+            dir_b.path().to_path_buf(),
+        ));
+
+        let keystore_a = server_a.keystore().await.unwrap();
+        let settings_a = server_a.settings_store().await.unwrap();
+        let keystore_b = server_b.keystore().await.unwrap();
+        let settings_b = server_b.settings_store().await.unwrap();
+        keystore_a
+            .generate("default".into(), true, false)
+            .await
+            .unwrap();
+        keystore_b
+            .generate("default".into(), true, false)
+            .await
+            .unwrap();
+        let client_a = server_a.client().await.unwrap();
+        let client_b = server_b.client().await.unwrap();
+
+        assert_eq!(server_a.context.runtime.server_name, "nostr-a");
+        assert_eq!(server_b.context.runtime.server_name, "nostr-b");
+        assert_eq!(
+            server_a.context.runtime.paths.config_root,
+            dir_a.path().to_path_buf()
+        );
+        assert_eq!(
+            server_b.context.runtime.paths.config_root,
+            dir_b.path().to_path_buf()
+        );
+        assert!(dir_a.path().join("keystore.secret").exists());
+        assert!(dir_b.path().join("keystore.secret").exists());
+        assert!(Arc::ptr_eq(
+            &keystore_a,
+            &server_a.keystore().await.unwrap()
+        ));
+        assert!(Arc::ptr_eq(
+            &settings_a,
+            &server_a.settings_store().await.unwrap()
+        ));
+        assert!(!Arc::ptr_eq(&keystore_a, &keystore_b));
+        assert!(!Arc::ptr_eq(&settings_a, &settings_b));
+        assert_eq!(client_a.active_label, "default");
+        assert_eq!(client_b.active_label, "default");
+        assert_ne!(client_a.active_pubkey, client_b.active_pubkey);
     }
 }

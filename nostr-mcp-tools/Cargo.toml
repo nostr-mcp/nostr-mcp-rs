@@ -26,3 +26,6 @@ tracing = { workspace = true }
 
 [features]
 keyring = ["nostr-mcp-core/keyring"]
+
+[dev-dependencies]
+tempfile = { workspace = true }

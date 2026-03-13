@@ -14,8 +14,25 @@ pub struct ActiveClient {
     pub active_pubkey: PublicKey,
 }
 
-static CLIENT_CELL: OnceCell<RwLock<Option<ActiveClient>>> = OnceCell::const_new();
-static BUILD_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
+pub struct ClientStore {
+    client_cell: OnceCell<RwLock<Option<ActiveClient>>>,
+    build_lock: OnceCell<Mutex<()>>,
+}
+
+impl ClientStore {
+    pub const fn new() -> Self {
+        Self {
+            client_cell: OnceCell::const_new(),
+            build_lock: OnceCell::const_new(),
+        }
+    }
+}
+
+impl Default for ClientStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 async fn build_from_keystore(
     ks: &KeyStore,
@@ -32,8 +49,9 @@ async fn build_from_keystore(
     let secrets = ks.secrets();
     let maybe_nsec = secrets.get(&label)?;
     let client = if let Some(nsec) = maybe_nsec {
-        let keys = Keys::parse(&nsec)
-            .map_err(|e| CoreError::invalid_input(format!("invalid stored secret for '{label}': {e}")))?;
+        let keys = Keys::parse(&nsec).map_err(|e| {
+            CoreError::invalid_input(format!("invalid stored secret for '{label}': {e}"))
+        })?;
 
         Client::builder()
             .signer(keys)
@@ -89,63 +107,68 @@ async fn build_from_keystore(
     }))
 }
 
-pub async fn ensure_client(
-    ks: Arc<KeyStore>,
-    settings_store: Arc<SettingsStore>,
-) -> Result<ActiveClient, CoreError> {
-    let cell = CLIENT_CELL
-        .get_or_try_init(|| async {
-            Ok::<RwLock<Option<ActiveClient>>, CoreError>(RwLock::new(None))
-        })
-        .await?;
-    {
-        let r = cell.read().await;
-        if let Some(ac) = r.clone() {
-            let active = ks.get_active().await;
-            if active.as_ref().map(|e| &e.label) == Some(&ac.active_label) {
-                return Ok(ac);
-            }
-        }
-    }
-    let _g = BUILD_LOCK
-        .get_or_try_init(|| async { Ok::<Mutex<()>, CoreError>(Mutex::new(())) })
-        .await?
-        .lock()
-        .await;
-    {
-        let r = cell.read().await;
-        if let Some(ac) = r.clone() {
-            let active = ks.get_active().await;
-            if active.as_ref().map(|e| &e.label) == Some(&ac.active_label) {
-                return Ok(ac);
-            }
-        }
-    }
-    let built = build_from_keystore(&ks, &settings_store).await?;
-    if let Some(ac) = built {
+impl ClientStore {
+    pub async fn ensure_client(
+        &self,
+        ks: Arc<KeyStore>,
+        settings_store: Arc<SettingsStore>,
+    ) -> Result<ActiveClient, CoreError> {
+        let cell = self
+            .client_cell
+            .get_or_try_init(|| async {
+                Ok::<RwLock<Option<ActiveClient>>, CoreError>(RwLock::new(None))
+            })
+            .await?;
         {
-            let mut w = cell.write().await;
-            *w = Some(ac.clone());
+            let r = cell.read().await;
+            if let Some(ac) = r.clone() {
+                let active = ks.get_active().await;
+                if active.as_ref().map(|e| &e.label) == Some(&ac.active_label) {
+                    return Ok(ac);
+                }
+            }
         }
-        Ok(ac)
-    } else {
-        Err(CoreError::invalid_input(
-            "no active nostr key; set one with nostr_keys_set_active",
-        ))
+        let _g = self
+            .build_lock
+            .get_or_try_init(|| async { Ok::<Mutex<()>, CoreError>(Mutex::new(())) })
+            .await?
+            .lock()
+            .await;
+        {
+            let r = cell.read().await;
+            if let Some(ac) = r.clone() {
+                let active = ks.get_active().await;
+                if active.as_ref().map(|e| &e.label) == Some(&ac.active_label) {
+                    return Ok(ac);
+                }
+            }
+        }
+        let built = build_from_keystore(&ks, &settings_store).await?;
+        if let Some(ac) = built {
+            {
+                let mut w = cell.write().await;
+                *w = Some(ac.clone());
+            }
+            Ok(ac)
+        } else {
+            Err(CoreError::invalid_input(
+                "no active nostr key; set one with nostr_keys_set_active",
+            ))
+        }
     }
-}
 
-pub async fn reset_cached_client() -> Result<(), CoreError> {
-    if let Some(cell) = CLIENT_CELL.get() {
-        let mut w = cell.write().await;
-        *w = None;
+    pub async fn reset(&self) -> Result<(), CoreError> {
+        if let Some(cell) = self.client_cell.get() {
+            let mut w = cell.write().await;
+            *w = None;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ensure_client;
+    use super::ClientStore;
     use crate::key_store::KeyStore;
     use crate::secrets::InMemorySecretStore;
     use crate::settings::SettingsStore;
@@ -163,9 +186,15 @@ mod tests {
         let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets)
             .await
             .unwrap();
-        let ss = SettingsStore::load_or_init(settings_path, pass).await.unwrap();
+        let ss = SettingsStore::load_or_init(settings_path, pass)
+            .await
+            .unwrap();
+        let store = ClientStore::new();
 
-        let err = ensure_client(Arc::new(ks), Arc::new(ss)).await.unwrap_err();
+        let err = store
+            .ensure_client(Arc::new(ks), Arc::new(ss))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("no active nostr key"));
     }
 }
