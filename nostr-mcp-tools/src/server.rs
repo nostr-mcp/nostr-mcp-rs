@@ -1,4 +1,5 @@
 mod keys;
+mod relays;
 
 use crate::runtime::{NostrMcpPaths, NostrMcpRuntime};
 use crate::util;
@@ -48,11 +49,6 @@ use nostr_mcp_core::publish::{
     PublishSignedEventArgs, SignEventArgs,
 };
 use nostr_mcp_core::references::{parse_text_references, ParseReferencesArgs};
-use nostr_mcp_core::relay_info::{fetch_relay_info, RelayInfoArgs};
-use nostr_mcp_core::relays::{
-    connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
-    RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs,
-};
 use nostr_mcp_core::replies::{post_comment, post_reply, PostCommentArgs, PostReplyArgs};
 #[cfg(not(feature = "keyring"))]
 use nostr_mcp_core::secrets::InMemorySecretStore;
@@ -208,117 +204,9 @@ impl NostrMcpServer {
 
     pub fn with_runtime(runtime: NostrMcpRuntime) -> Self {
         Self {
-            tool_router: Self::tool_router() + Self::key_tool_router(),
+            tool_router: Self::tool_router() + Self::key_tool_router() + Self::relay_tool_router(),
             context: Arc::new(ServerContext::new(runtime)),
         }
-    }
-
-    #[tool(
-        description = "Set relays and connect. Requires an active nostr key. read_write: read|write|both"
-    )]
-    pub async fn nostr_relays_set(
-        &self,
-        Parameters(args): Parameters<RelaysSetArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        set_relays(&ac.client, args).await.map_err(core_error)?;
-
-        let relay_urls = get_relay_urls(&ac.client).await;
-        let pubkey_hex = ac.active_pubkey.to_hex();
-        let existing = ss.get_settings(&pubkey_hex).await;
-        let settings = KeySettings {
-            relays: relay_urls.clone(),
-            metadata: existing.as_ref().and_then(|s| s.metadata.clone()),
-            follows: existing
-                .as_ref()
-                .map(|s| s.follows.clone())
-                .unwrap_or_default(),
-        };
-        ss.save_settings(pubkey_hex, settings)
-            .await
-            .map_err(core_error)?;
-
-        let rows = list_relays(&ac.client).await.map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Connect to relays that were previously added. Requires an active nostr key."
-    )]
-    pub async fn nostr_relays_connect(
-        &self,
-        Parameters(args): Parameters<RelaysConnectArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        connect_relays(&ac.client, args).await.map_err(core_error)?;
-        let rows = list_relays(&ac.client).await.map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Disconnect or remove relays. When force_remove=true, relays are removed from the pool."
-    )]
-    pub async fn nostr_relays_disconnect(
-        &self,
-        Parameters(args): Parameters<RelaysDisconnectArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        disconnect_relays(&ac.client, args)
-            .await
-            .map_err(core_error)?;
-
-        let relay_urls = get_relay_urls(&ac.client).await;
-        let pubkey_hex = ac.active_pubkey.to_hex();
-        let existing = ss.get_settings(&pubkey_hex).await;
-        let settings = KeySettings {
-            relays: relay_urls.clone(),
-            metadata: existing.as_ref().and_then(|s| s.metadata.clone()),
-            follows: existing
-                .as_ref()
-                .map(|s| s.follows.clone())
-                .unwrap_or_default(),
-        };
-        ss.save_settings(pubkey_hex, settings)
-            .await
-            .map_err(core_error)?;
-
-        let rows = list_relays(&ac.client).await.map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(description = "List relay status and flags")]
-    pub async fn nostr_relays_status(
-        &self,
-        _args: Parameters<EmptyArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let ks = self.keystore().await?;
-        let ss = self.settings_store().await?;
-        let ac = self.ensure_client_from(ks, ss.clone()).await?;
-        let rows = list_relays(&ac.client).await.map_err(core_error)?;
-        let summary = status_summary(&ac.client).await.map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "summary": summary, "relays": rows }))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(
-        description = "Fetch relay information document (NIP-11). Accepts ws/wss/http/https relay URL. Optional: timeout_secs (default: 10)."
-    )]
-    pub async fn nostr_relays_get_info(
-        &self,
-        Parameters(args): Parameters<RelayInfoArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let result = fetch_relay_info(args).await.map_err(core_error)?;
-        let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
     }
 
     #[tool(
