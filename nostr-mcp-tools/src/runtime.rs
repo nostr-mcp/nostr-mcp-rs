@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NostrMcpPaths {
@@ -59,15 +59,6 @@ pub fn default_config_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
         .join("nostr-mcp")
-}
-
-pub fn parse_config_root(path: &str) -> Option<PathBuf> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(Path::new(trimmed).to_path_buf())
-    }
 }
 
 #[cfg(test)]

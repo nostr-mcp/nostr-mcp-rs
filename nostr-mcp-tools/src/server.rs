@@ -1,4 +1,4 @@
-use crate::runtime::{NostrMcpPaths, NostrMcpRuntime, parse_config_root};
+use crate::runtime::{NostrMcpPaths, NostrMcpRuntime};
 use crate::util;
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::client::{ensure_client, reset_cached_client};
@@ -69,11 +69,9 @@ use rmcp::{
         CallToolResult, Content, ErrorData, Implementation, ProtocolVersion, ServerCapabilities,
         ServerInfo,
     },
-    schemars::JsonSchema,
     tool, tool_handler, tool_router,
     transport::stdio,
 };
-use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::{Duration, sleep};
@@ -205,11 +203,6 @@ impl NostrMcpServer {
         let guard = cell.read().await;
         Ok(guard.clone())
     }
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ConfigDirSetArgs {
-    pub path: String,
 }
 
 #[tool_router]
@@ -367,37 +360,6 @@ impl NostrMcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let result = derive_public(&args.private_key).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(description = "Get the directory used to persist the key index (no secrets)")]
-    pub async fn nostr_config_dir_get(
-        &self,
-        _args: Parameters<EmptyArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let runtime = runtime().await;
-        let content = Content::json(serde_json::json!({
-            "dir": runtime.paths.config_root,
-            "file": runtime.paths.index_path
-        }))?;
-        Ok(CallToolResult::success(vec![content]))
-    }
-
-    #[tool(description = "Set the directory used to persist the key index (no secrets)")]
-    pub async fn nostr_config_dir_set(
-        &self,
-        Parameters(args): Parameters<ConfigDirSetArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let config_root = parse_config_root(&args.path)
-            .ok_or_else(|| ErrorData::invalid_params("path must not be empty", None))?;
-        let runtime = runtime().await.with_config_root(config_root);
-        configure_runtime(runtime.clone())
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!({
-            "dir": runtime.paths.config_root,
-            "file": runtime.paths.index_path
-        }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
@@ -1628,7 +1590,7 @@ impl ServerHandler for NostrMcpServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_config_dir_get, nostr_config_dir_set, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_handlers_recommend, nostr_handlers_register, nostr_badges_define, nostr_badges_award, nostr_badges_set_profile, nostr_events_parse_emojis, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
+                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_handlers_recommend, nostr_handlers_register, nostr_badges_define, nostr_badges_award, nostr_badges_set_profile, nostr_events_parse_emojis, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
                     .to_string(),
             ),
         }
@@ -1704,21 +1666,32 @@ mod tests {
         serde_json::from_str(&data).expect("parse tools registry")
     }
 
+    fn is_generic_tool(tool: &ToolEntry) -> bool {
+        tool.status == "stable"
+            && !matches!(
+                tool.name.as_str(),
+                "nostr_config_dir_get" | "nostr_config_dir_set"
+            )
+    }
+
     #[test]
     fn tool_router_registers_core_tools() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        for tool in registry
-            .tools
-            .into_iter()
-            .filter(|tool| tool.status == "stable")
-        {
+        for tool in registry.tools.into_iter().filter(is_generic_tool) {
             assert!(
                 server.tool_router.has_route(&tool.name),
                 "missing tool route: {}",
                 tool.name
             );
         }
+    }
+
+    #[test]
+    fn tool_router_excludes_host_local_runtime_tools() {
+        let server = NostrMcpServer::new();
+        assert!(!server.tool_router.has_route("nostr_config_dir_get"));
+        assert!(!server.tool_router.has_route("nostr_config_dir_set"));
     }
 
     #[test]
