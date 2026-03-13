@@ -1,8 +1,8 @@
 use crate::error::CoreError;
-use nostr::nips::nip11::RelayInformationDocument;
 use nostr::JsonUtil;
-use reqwest::header::ACCEPT;
+use nostr::nips::nip11::RelayInformationDocument;
 use reqwest::Client;
+use reqwest::header::ACCEPT;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -66,10 +66,10 @@ pub async fn fetch_relay_info(args: RelayInfoArgs) -> Result<RelayInfoResult, Co
 fn normalize_relay_http_url(input: &str) -> Result<String, CoreError> {
     let trimmed = input.trim();
     if let Some(rest) = trimmed.strip_prefix("wss://") {
-        return Ok(format!("https://{}", rest));
+        return Ok(format!("https://{rest}"));
     }
     if let Some(rest) = trimmed.strip_prefix("ws://") {
-        return Ok(format!("http://{}", rest));
+        return Ok(format!("http://{rest}"));
     }
     if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
         return Ok(trimmed.to_string());

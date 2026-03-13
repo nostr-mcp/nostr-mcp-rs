@@ -1,8 +1,7 @@
 use crate::error::CoreError;
 use nostr::nips::nip19::{Nip19, Nip19Coordinate, Nip19Event, Nip19Profile};
 use nostr::prelude::{
-    Coordinate, EventId, FromBech32, Kind, PublicKey, RelayUrl, SecretKey,
-    ToBech32,
+    Coordinate, EventId, FromBech32, Kind, PublicKey, RelayUrl, SecretKey, ToBech32,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -96,9 +95,8 @@ pub fn decode_nip19(args: Nip19DecodeArgs) -> Result<Nip19DecodeResult, CoreErro
         });
     }
 
-    let nip19 = Nip19::from_bech32(&input).map_err(|e| {
-        CoreError::invalid_input(format!("invalid nip19 entity: {e}"))
-    })?;
+    let nip19 = Nip19::from_bech32(&input)
+        .map_err(|e| CoreError::invalid_input(format!("invalid nip19 entity: {e}")))?;
 
     match nip19 {
         Nip19::Pubkey(pubkey) => Ok(Nip19DecodeResult {
@@ -114,7 +112,7 @@ pub fn decode_nip19(args: Nip19DecodeArgs) -> Result<Nip19DecodeResult, CoreErro
                 is_secret: false,
             },
         }),
-        Nip19::Secret(secret) => {
+        Nip19::Secret(_secret) => {
             if !allow_secret {
                 return Err(CoreError::invalid_input(
                     "nsec decoding is disabled (allow_secret=false)",
@@ -315,9 +313,7 @@ fn parse_coordinate(
                 )));
             }
             let kind = kind.ok_or_else(|| {
-                CoreError::invalid_input(
-                    "kind is required for naddr when input is a pubkey",
-                )
+                CoreError::invalid_input("kind is required for naddr when input is a pubkey")
             })?;
             let identifier = identifier.unwrap_or_default();
             Coordinate {
@@ -328,9 +324,9 @@ fn parse_coordinate(
         }
     };
 
-    coordinate.verify().map_err(|e| {
-        CoreError::invalid_input(format!("invalid coordinate: {e}"))
-    })?;
+    coordinate
+        .verify()
+        .map_err(|e| CoreError::invalid_input(format!("invalid coordinate: {e}")))?;
 
     Ok(coordinate)
 }
@@ -346,8 +342,8 @@ fn looks_like_coordinate(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_nip19, encode_nip19, Nip19DecodeArgs, Nip19EncodeArgs,
-        Nip19EncodeTarget, Nip19EntityType,
+        Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget, Nip19EntityType, decode_nip19,
+        encode_nip19,
     };
     use nostr::nips::nip19::ToBech32;
     use nostr::prelude::{EventId, Keys};

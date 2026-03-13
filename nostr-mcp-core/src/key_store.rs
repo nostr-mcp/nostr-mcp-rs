@@ -250,7 +250,7 @@ impl KeyStore {
         let entry = data
             .keys
             .get(&target_label)
-            .ok_or_else(|| CoreError::invalid_input(format!("key not found: {}", target_label)))?;
+            .ok_or_else(|| CoreError::invalid_input(format!("key not found: {target_label}")))?;
 
         let public_key_bech32 = entry.public_key.clone();
         let public_key = PublicKey::from_bech32(&public_key_bech32)
@@ -268,8 +268,7 @@ impl KeyStore {
         if include_private {
             let secret = self.secrets.get(&target_label)?.ok_or_else(|| {
                 CoreError::invalid_input(format!(
-                    "private key not found in secure storage for key: {}",
-                    target_label
+                    "private key not found in secure storage for key: {target_label}"
                 ))
             })?;
 
@@ -468,9 +467,10 @@ mod tests {
             .export_key(Some("watch".to_string()), ExportFormat::Bech32, true)
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("private key not found in secure storage"));
+        assert!(
+            err.to_string()
+                .contains("private key not found in secure storage")
+        );
     }
 
     #[tokio::test]

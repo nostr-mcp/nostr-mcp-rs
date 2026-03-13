@@ -164,7 +164,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_nostr_references, ParseReferencesArgs, ReferenceType};
+    use super::{ParseReferencesArgs, ReferenceType, extract_nostr_references};
     use nostr::prelude::*;
 
     #[test]
@@ -176,24 +176,28 @@ mod tests {
             .unwrap();
         let note = event.id.to_bech32().unwrap();
 
-        let content = format!(
-            "Hello nostr:{npub} and nostr:{note}!",
-            npub = npub,
-            note = note
-        );
+        let content = format!("Hello nostr:{npub} and nostr:{note}!");
         let args = ParseReferencesArgs { content };
         let references = extract_nostr_references(&args.content);
 
         assert_eq!(references.len(), 2);
-        assert!(references.iter().any(|r| matches!(r.reference_type, ReferenceType::Npub)));
-        assert!(references.iter().any(|r| matches!(r.reference_type, ReferenceType::Note)));
+        assert!(
+            references
+                .iter()
+                .any(|r| matches!(r.reference_type, ReferenceType::Npub))
+        );
+        assert!(
+            references
+                .iter()
+                .any(|r| matches!(r.reference_type, ReferenceType::Note))
+        );
     }
 
     #[test]
     fn parse_text_references_stops_on_punctuation() {
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
-        let content = format!("hi nostr:{npub}, ok", npub = npub);
+        let content = format!("hi nostr:{npub}, ok");
         let references = extract_nostr_references(&content);
 
         assert_eq!(references.len(), 1);
