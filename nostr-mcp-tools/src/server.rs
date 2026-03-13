@@ -1,3 +1,4 @@
+use crate::runtime::{NostrMcpPaths, NostrMcpRuntime, parse_config_root};
 use crate::util;
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::client::{ensure_client, reset_cached_client};
@@ -73,7 +74,6 @@ use rmcp::{
     transport::stdio,
 };
 use serde::Deserialize;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::time::{Duration, sleep};
@@ -81,11 +81,28 @@ use tracing::info;
 
 static KEYSTORE: OnceCell<RwLock<Arc<KeyStore>>> = OnceCell::const_new();
 static SETTINGS_STORE: OnceCell<RwLock<Arc<SettingsStore>>> = OnceCell::const_new();
+static RUNTIME: OnceCell<RwLock<NostrMcpRuntime>> = OnceCell::const_new();
 
-fn secret_store() -> Arc<dyn SecretStore> {
+async fn runtime_cell() -> &'static RwLock<NostrMcpRuntime> {
+    RUNTIME
+        .get_or_init(|| async { RwLock::new(NostrMcpRuntime::default()) })
+        .await
+}
+
+async fn runtime() -> NostrMcpRuntime {
+    runtime_cell().await.read().await.clone()
+}
+
+async fn set_runtime(runtime: NostrMcpRuntime) {
+    let cell = runtime_cell().await;
+    let mut current = cell.write().await;
+    *current = runtime;
+}
+
+fn secret_store(_runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
     #[cfg(feature = "keyring")]
     {
-        Arc::new(KeyringSecretStore::new("goostr"))
+        Arc::new(KeyringSecretStore::new(&_runtime.keyring_service))
     }
     #[cfg(not(feature = "keyring"))]
     {
@@ -93,14 +110,21 @@ fn secret_store() -> Arc<dyn SecretStore> {
     }
 }
 
-async fn load_or_init_keystore(path: PathBuf) -> Result<KeyStore, CoreError> {
-    let pass = Arc::new(util::ensure_keystore_secret()?);
-    KeyStore::load_or_init(path, pass, secret_store()).await
+async fn load_or_init_keystore(
+    paths: &NostrMcpPaths,
+    runtime: &NostrMcpRuntime,
+) -> Result<KeyStore, CoreError> {
+    let pass = Arc::new(util::ensure_keystore_secret(
+        paths.keystore_secret_path.as_path(),
+    )?);
+    KeyStore::load_or_init(paths.index_path.clone(), pass, secret_store(runtime)).await
 }
 
-async fn load_or_init_settings(path: PathBuf) -> Result<SettingsStore, CoreError> {
-    let pass = Arc::new(util::ensure_keystore_secret()?);
-    SettingsStore::load_or_init(path, pass).await
+async fn load_or_init_settings(paths: &NostrMcpPaths) -> Result<SettingsStore, CoreError> {
+    let pass = Arc::new(util::ensure_keystore_secret(
+        paths.keystore_secret_path.as_path(),
+    )?);
+    SettingsStore::load_or_init(paths.settings_path.clone(), pass).await
 }
 
 fn core_error(err: CoreError) -> ErrorData {
@@ -114,6 +138,40 @@ fn invalid_params<E: ToString>(err: E) -> ErrorData {
     ErrorData::invalid_params(err.to_string(), None)
 }
 
+async fn refresh_keystore(runtime: &NostrMcpRuntime) -> Result<(), CoreError> {
+    let new_store = Arc::new(load_or_init_keystore(&runtime.paths, runtime).await?);
+    let initial_store = new_store.clone();
+    let cell = KEYSTORE
+        .get_or_try_init(|| async {
+            Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(initial_store))
+        })
+        .await?;
+    let mut w = cell.write().await;
+    *w = new_store;
+    Ok(())
+}
+
+async fn refresh_settings_store(runtime: &NostrMcpRuntime) -> Result<(), CoreError> {
+    let new_store = Arc::new(load_or_init_settings(&runtime.paths).await?);
+    let initial_store = new_store.clone();
+    let cell = SETTINGS_STORE
+        .get_or_try_init(|| async {
+            Ok::<RwLock<Arc<SettingsStore>>, CoreError>(RwLock::new(initial_store))
+        })
+        .await?;
+    let mut w = cell.write().await;
+    *w = new_store;
+    Ok(())
+}
+
+pub async fn configure_runtime(runtime: NostrMcpRuntime) -> Result<(), CoreError> {
+    set_runtime(runtime.clone()).await;
+    refresh_keystore(&runtime).await?;
+    refresh_settings_store(&runtime).await?;
+    reset_cached_client().await?;
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct NostrMcpServer {
     tool_router: ToolRouter<Self>,
@@ -121,10 +179,11 @@ pub struct NostrMcpServer {
 
 impl NostrMcpServer {
     async fn keystore() -> Result<Arc<KeyStore>, ErrorData> {
+        let runtime = runtime().await;
+        let init_runtime = runtime.clone();
         let cell = KEYSTORE
-            .get_or_try_init(|| async {
-                let path = util::nostr_index_path();
-                let ks = load_or_init_keystore(path).await?;
+            .get_or_try_init(move || async move {
+                let ks = load_or_init_keystore(&init_runtime.paths, &init_runtime).await?;
                 Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(Arc::new(ks)))
             })
             .await
@@ -134,10 +193,11 @@ impl NostrMcpServer {
     }
 
     async fn settings_store() -> Result<Arc<SettingsStore>, ErrorData> {
+        let runtime = runtime().await;
+        let init_paths = runtime.paths.clone();
         let cell = SETTINGS_STORE
-            .get_or_try_init(|| async {
-                let path = util::nostr_settings_path();
-                let ss = load_or_init_settings(path).await?;
+            .get_or_try_init(move || async move {
+                let ss = load_or_init_settings(&init_paths).await?;
                 Ok::<RwLock<Arc<SettingsStore>>, CoreError>(RwLock::new(Arc::new(ss)))
             })
             .await
@@ -315,10 +375,10 @@ impl NostrMcpServer {
         &self,
         _args: Parameters<EmptyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let current = util::nostr_config_root();
+        let runtime = runtime().await;
         let content = Content::json(serde_json::json!({
-            "dir": current,
-            "file": util::nostr_index_path()
+            "dir": runtime.paths.config_root,
+            "file": runtime.paths.index_path
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -328,25 +388,15 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ConfigDirSetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        std::env::set_var("GOOSTR_DIR", args.path);
-        let path = util::nostr_index_path();
-        let new_store = load_or_init_keystore(path).await.map_err(core_error)?;
-        let cell = KEYSTORE
-            .get_or_try_init(|| async {
-                let path = util::nostr_index_path();
-                let ks = load_or_init_keystore(path).await?;
-                Ok::<RwLock<Arc<KeyStore>>, CoreError>(RwLock::new(Arc::new(ks)))
-            })
+        let config_root = parse_config_root(&args.path)
+            .ok_or_else(|| ErrorData::invalid_params("path must not be empty", None))?;
+        let runtime = runtime().await.with_config_root(config_root);
+        configure_runtime(runtime.clone())
             .await
             .map_err(core_error)?;
-        let mut w = cell.write().await;
-        *w = Arc::new(new_store);
-        reset_cached_client().await.map_err(core_error)?;
-
-        let current = util::nostr_config_root();
         let content = Content::json(serde_json::json!({
-            "dir": current,
-            "file": util::nostr_index_path()
+            "dir": runtime.paths.config_root,
+            "file": runtime.paths.index_path
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -1603,7 +1653,15 @@ async fn wait_for_shutdown() {
 }
 
 pub async fn start_stdio_server() -> anyhow::Result<()> {
-    info!("starting goostr MCP server (stdio)");
+    start_stdio_server_with_runtime(NostrMcpRuntime::default()).await
+}
+
+pub async fn start_stdio_server_with_runtime(
+    runtime_config: NostrMcpRuntime,
+) -> anyhow::Result<()> {
+    configure_runtime(runtime_config).await?;
+    let server_name = runtime().await.server_name;
+    info!("starting {server_name} MCP server (stdio)");
     loop {
         let service = NostrMcpServer::new().serve(stdio()).await?;
         info!("server ready (stdio)");
