@@ -966,7 +966,7 @@ impl NostrMcpServer {
     }
 
     #[tool(
-        description = "Post a reply/comment using the active key. Automatically uses NIP-10 (kind 1 reply) for kind 1 text notes, or NIP-22 (kind 1111 comment) for all other content types. Use reply_to_id, reply_to_pubkey, and reply_to_kind to specify the target. For threaded replies to kind 1 notes, optionally provide root_event_id and root_event_pubkey. Returns the event ID and pubkey that signed it for verification. Optional: root_event_id (hex), root_event_pubkey (hex), mentioned_pubkeys (hex array), relay_hint (url), pow (u8), to_relays (urls)"
+        description = "Post a reply/comment using the active key. Automatically uses NIP-10 (kind 1 reply) for kind 1 text notes, or NIP-22 (kind 1111 comment) for all other content types. Use reply_to_id, reply_to_pubkey, and reply_to_kind to specify the parent target. For kind 1 threads, optionally provide root_event_id and root_event_pubkey. For non-kind1 threaded comments where the root differs from the parent, also provide root_event_id, root_event_pubkey, and root_event_kind. Returns the event ID and pubkey that signed it for verification. Optional: root_event_id (hex), root_event_pubkey (hex), root_event_kind (u16), mentioned_pubkeys (hex array), relay_hint (url), pow (u8), to_relays (urls)"
     )]
     pub async fn nostr_events_post_reply(
         &self,
