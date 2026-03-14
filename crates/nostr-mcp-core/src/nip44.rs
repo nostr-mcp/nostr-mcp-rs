@@ -2,16 +2,8 @@ use crate::error::CoreError;
 use base64::engine::{general_purpose, Engine};
 use nostr::nips::nip44;
 use nostr::prelude::{FromBech32, Keys, PublicKey, SecretKey, ToBech32};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip44EncryptArgs {
-    pub private_key: String,
-    pub public_key: String,
-    pub plaintext: String,
-    pub version: Option<u8>,
-}
+use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
+use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct Nip44EncryptResult {
@@ -19,13 +11,6 @@ pub struct Nip44EncryptResult {
     pub version: u8,
     pub peer_public_key_hex: String,
     pub peer_public_key_npub: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip44DecryptArgs {
-    pub private_key: String,
-    pub public_key: String,
-    pub ciphertext: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -127,9 +112,9 @@ fn parse_public_key(value: &str) -> Result<PublicKey, CoreError> {
 mod tests {
     use super::{
         decrypt_nip44, encrypt_nip44, parse_public_key, parse_secret_key, payload_version,
-        Nip44DecryptArgs, Nip44EncryptArgs,
     };
     use nostr::prelude::{Keys, SecretKey, ToBech32};
+    use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
 
     #[test]
     fn nip44_encrypt_decrypt_round_trip() {

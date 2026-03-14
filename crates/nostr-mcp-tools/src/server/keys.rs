@@ -1,8 +1,10 @@
-use super::{core_error, NostrMcpServer};
-use nostr_mcp_core::key_store::{
-    EmptyArgs, ExportArgs, GenerateArgs, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+use super::{NostrMcpServer, core_error};
+use nostr_mcp_core::keys::{derive_public, verify_key};
+use nostr_mcp_types::common::EmptyArgs;
+use nostr_mcp_types::key_store::{
+    ExportArgs, GenerateArgs, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
 };
-use nostr_mcp_core::keys::{derive_public, verify_key, DerivePublicArgs, VerifyArgs};
+use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, Content, ErrorData},

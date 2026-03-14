@@ -1,10 +1,12 @@
-use super::{core_error, NostrMcpServer};
+use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
 use nostr_mcp_core::groups::{
     create_group, create_invite, delete_group, delete_group_event, edit_group_metadata, join_group,
-    leave_group, put_user, remove_user, CreateGroupArgs, CreateInviteArgs, DeleteEventArgs,
-    DeleteGroupArgs, EditGroupMetadataArgs, JoinGroupArgs, LeaveGroupArgs, PutUserArgs,
-    RemoveUserArgs,
+    leave_group, put_user, remove_user,
+};
+use nostr_mcp_types::groups::{
+    CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
+    JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs,
 };
 use rmcp::{
     handler::server::wrapper::Parameters,

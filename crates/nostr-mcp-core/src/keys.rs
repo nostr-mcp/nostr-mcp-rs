@@ -3,11 +3,6 @@ use nostr::prelude::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct VerifyArgs {
-    pub key: String,
-}
-
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct VerifyResult {
     pub input: String,
@@ -28,11 +23,6 @@ pub enum KeyType {
     Nsec,
     Hex,
     Invalid,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DerivePublicArgs {
-    pub private_key: String,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]

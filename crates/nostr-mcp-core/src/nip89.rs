@@ -1,41 +1,7 @@
 use crate::error::CoreError;
-use crate::publish::{publish_event_builder, SendResult};
+use crate::publish::{SendResult, publish_event_builder};
+use nostr_mcp_types::nip89::{Nip89HandlerInfoArgs, Nip89RecommendArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip89RecommendArgs {
-    pub supported_kind: u16,
-    pub handlers: Vec<Nip89HandlerRecommendation>,
-    pub content: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip89HandlerRecommendation {
-    pub address: String,
-    pub relay: Option<String>,
-    pub platform: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip89HandlerInfoArgs {
-    pub identifier: String,
-    pub kinds: Vec<u16>,
-    pub links: Vec<Nip89HandlerLink>,
-    pub content: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip89HandlerLink {
-    pub platform: String,
-    pub url: String,
-    pub entity: Option<String>,
-}
 
 pub async fn post_recommendation(
     client: &Client,
@@ -178,9 +144,9 @@ fn is_valid_entity(entity: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        handler_info_tags, recommendation_tags, Nip89HandlerInfoArgs, Nip89HandlerLink,
-        Nip89HandlerRecommendation, Nip89RecommendArgs,
+    use super::{handler_info_tags, recommendation_tags};
+    use nostr_mcp_types::nip89::{
+        Nip89HandlerInfoArgs, Nip89HandlerLink, Nip89HandlerRecommendation, Nip89RecommendArgs,
     };
 
     #[test]
@@ -267,14 +233,17 @@ mod tests {
         })
         .unwrap();
 
-        assert!(tags
-            .iter()
-            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("d")));
-        assert!(tags
-            .iter()
-            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("k")));
-        assert!(tags
-            .iter()
-            .any(|tag| tag.as_slice().first().map(String::as_str) == Some("web")));
+        assert!(
+            tags.iter()
+                .any(|tag| tag.as_slice().first().map(String::as_str) == Some("d"))
+        );
+        assert!(
+            tags.iter()
+                .any(|tag| tag.as_slice().first().map(String::as_str) == Some("k"))
+        );
+        assert!(
+            tags.iter()
+                .any(|tag| tag.as_slice().first().map(String::as_str) == Some("web"))
+        );
     }
 }

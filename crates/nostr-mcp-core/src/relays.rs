@@ -1,26 +1,8 @@
 use crate::error::CoreError;
+use nostr_mcp_types::relays::{RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RelaysSetArgs {
-    pub urls: Vec<String>,
-    pub read_write: Option<String>,
-    pub autoconnect: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RelaysConnectArgs {
-    pub urls: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RelaysDisconnectArgs {
-    pub urls: Option<Vec<String>>,
-    pub force_remove: Option<bool>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct RelayStatusRow {
@@ -161,8 +143,9 @@ mod tests {
     #[test]
     fn parse_read_write_rejects_invalid() {
         let err = parse_read_write(Some("nope")).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("read_write must be one of: read, write, both"));
+        assert!(
+            err.to_string()
+                .contains("read_write must be one of: read, write, both")
+        );
     }
 }

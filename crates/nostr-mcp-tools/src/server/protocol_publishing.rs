@@ -1,12 +1,11 @@
-use super::{core_error, NostrMcpServer};
+use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
-use nostr_mcp_core::nip58::{
-    post_badge_award, post_badge_definition, post_profile_badges, Nip58BadgeAwardArgs,
-    Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
+use nostr_mcp_core::nip58::{post_badge_award, post_badge_definition, post_profile_badges};
+use nostr_mcp_core::nip89::{post_handler_info, post_recommendation};
+use nostr_mcp_types::nip58::{
+    Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
 };
-use nostr_mcp_core::nip89::{
-    post_handler_info, post_recommendation, Nip89HandlerInfoArgs, Nip89RecommendArgs,
-};
+use nostr_mcp_types::nip89::{Nip89HandlerInfoArgs, Nip89RecommendArgs};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, Content, ErrorData},

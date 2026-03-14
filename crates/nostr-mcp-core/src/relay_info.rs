@@ -1,23 +1,11 @@
 use crate::error::CoreError;
-use nostr::nips::nip11::RelayInformationDocument;
 use nostr::JsonUtil;
-use reqwest::header::ACCEPT;
+use nostr::nips::nip11::RelayInformationDocument;
+use nostr_mcp_types::relay_info::RelayInfoArgs;
 use reqwest::Client;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use reqwest::header::ACCEPT;
+use serde::Serialize;
 use std::time::Duration;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RelayInfoArgs {
-    pub relay_url: String,
-    pub timeout_secs: Option<u64>,
-}
-
-impl RelayInfoArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct RelayInfoResult {

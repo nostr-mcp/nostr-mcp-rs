@@ -1,14 +1,7 @@
 use nostr::prelude::Url;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use nostr_mcp_types::nip30::Nip30ParseArgs;
+use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip30ParseArgs {
-    pub content: String,
-    pub tags: Option<Vec<Vec<String>>>,
-    pub kind: Option<u16>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct Nip30ParseResult {
@@ -187,8 +180,8 @@ fn find_next_colon(bytes: &[u8], start: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::Nip30ParseArgs;
     use super::{extract_mentions, is_supported_kind, parse_emoji_tags, parse_nip30_emojis};
+    use nostr_mcp_types::nip30::Nip30ParseArgs;
 
     #[test]
     fn parse_emoji_tags_accepts_valid() {

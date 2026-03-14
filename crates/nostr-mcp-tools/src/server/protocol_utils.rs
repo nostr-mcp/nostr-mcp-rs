@@ -1,6 +1,8 @@
-use super::{core_error, NostrMcpServer};
-use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05, Nip05ResolveArgs, Nip05VerifyArgs};
-use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44, Nip44DecryptArgs, Nip44EncryptArgs};
+use super::{NostrMcpServer, core_error};
+use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05};
+use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44};
+use nostr_mcp_types::nip05::{Nip05ResolveArgs, Nip05VerifyArgs};
+use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, Content, ErrorData},

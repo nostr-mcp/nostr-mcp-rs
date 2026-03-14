@@ -1,59 +1,10 @@
 use crate::error::CoreError;
-use crate::publish::{publish_event_builder, SendResult};
+use crate::publish::{SendResult, publish_event_builder};
+use nostr_mcp_types::nip58::{
+    Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58BadgeImage, Nip58ProfileBadgesArgs,
+};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::Deserialize;
 use std::str::FromStr;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58BadgeDefinitionArgs {
-    pub identifier: String,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub image: Option<Nip58BadgeImage>,
-    pub thumbs: Option<Vec<Nip58BadgeImage>>,
-    pub content: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58BadgeImage {
-    pub url: String,
-    pub dimensions: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58BadgeAwardArgs {
-    pub badge: String,
-    pub badge_relay: Option<String>,
-    pub recipients: Vec<Nip58BadgeRecipient>,
-    pub content: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58BadgeRecipient {
-    pub pubkey: String,
-    pub relay: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58ProfileBadgesArgs {
-    pub badges: Vec<Nip58BadgeDisplay>,
-    pub content: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip58BadgeDisplay {
-    pub badge: String,
-    pub badge_relay: Option<String>,
-    pub award_event_id: String,
-    pub award_relay: Option<String>,
-}
 
 pub async fn post_badge_definition(
     client: &Client,
@@ -254,9 +205,9 @@ fn parse_badge_coordinate(value: &str) -> Result<Coordinate, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        badge_award_tags, badge_definition_tags, profile_badges_tags, Nip58BadgeAwardArgs,
-        Nip58BadgeDefinitionArgs, Nip58BadgeDisplay, Nip58ProfileBadgesArgs,
+    use super::{badge_award_tags, badge_definition_tags, profile_badges_tags};
+    use nostr_mcp_types::nip58::{
+        Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58BadgeDisplay, Nip58ProfileBadgesArgs,
     };
 
     #[test]

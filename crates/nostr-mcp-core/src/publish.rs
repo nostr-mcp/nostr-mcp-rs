@@ -1,7 +1,11 @@
 use crate::error::CoreError;
+use nostr_mcp_types::publish::{
+    CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
+    PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
+    SignEventArgs,
+};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
@@ -12,104 +16,10 @@ pub struct SendResult {
     pub pubkey: String,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostTextArgs {
-    pub content: String,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateTextArgs {
-    pub content: String,
-    pub tags: Option<Vec<Vec<String>>>,
-    pub created_at: Option<u64>,
-}
-
 #[derive(Debug, Serialize)]
 pub struct CreateTextResult {
     pub event_id: String,
     pub pubkey: String,
-    pub unsigned_event_json: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostThreadArgs {
-    pub content: String,
-    pub subject: String,
-    pub hashtags: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostLongFormArgs {
-    pub content: String,
-    pub title: Option<String>,
-    pub summary: Option<String>,
-    pub image: Option<String>,
-    pub published_at: Option<u64>,
-    pub identifier: Option<String>,
-    pub hashtags: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostGroupChatArgs {
-    pub content: String,
-    pub group_id: String,
-    pub reply_to_id: Option<String>,
-    pub reply_to_relay: Option<String>,
-    pub reply_to_pubkey: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostReactionArgs {
-    pub event_id: String,
-    pub event_pubkey: String,
-    pub content: Option<String>,
-    pub event_kind: Option<u16>,
-    pub relay_hint: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostRepostArgs {
-    pub event_json: String,
-    pub relay_hint: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteEventsArgs {
-    pub event_ids: Option<Vec<String>>,
-    pub coordinates: Option<Vec<String>>,
-    pub reason: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostAnonymousArgs {
-    pub content: String,
-    pub tags: Option<Vec<Vec<String>>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PublishSignedEventArgs {
-    pub event_json: String,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SignEventArgs {
     pub unsigned_event_json: String,
 }
 
@@ -616,9 +526,11 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 mod tests {
     use super::{
         create_text_event, delete_events, group_chat_tags, long_form_tags, parse_signed_event,
-        reaction_payload, repost_builder, sign_unsigned_event, thread_tags, CreateTextArgs,
-        DeleteEventsArgs, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs, PostThreadArgs,
-        SignEventArgs,
+        reaction_payload, repost_builder, sign_unsigned_event, thread_tags,
+    };
+    use nostr_mcp_types::publish::{
+        CreateTextArgs, DeleteEventsArgs, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs,
+        PostThreadArgs, SignEventArgs,
     };
     use nostr_sdk::prelude::*;
 
@@ -733,9 +645,10 @@ mod tests {
         };
 
         let err = sign_unsigned_event(&keys_b, args).await.unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("unsigned event pubkey does not match"));
+        assert!(
+            err.to_string()
+                .contains("unsigned event pubkey does not match")
+        );
     }
 
     #[tokio::test]
@@ -824,9 +737,10 @@ mod tests {
         };
 
         let err = delete_events(&client, args).await.unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("event_ids or coordinates are required"));
+        assert!(
+            err.to_string()
+                .contains("event_ids or coordinates are required")
+        );
     }
 
     #[tokio::test]

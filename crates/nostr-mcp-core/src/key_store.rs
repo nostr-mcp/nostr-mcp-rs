@@ -4,6 +4,7 @@ use crate::secrets::SecretStore;
 use crate::storage;
 use chrono::Utc;
 use nostr::prelude::*;
+use nostr_mcp_types::key_store::ExportFormat;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -312,48 +313,6 @@ impl KeyStore {
     }
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GenerateArgs {
-    pub label: String,
-    pub make_active: Option<bool>,
-    pub persist_secret: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ImportArgs {
-    pub label: String,
-    pub key_material: String,
-    pub make_active: Option<bool>,
-    pub persist_secret: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RemoveArgs {
-    pub label: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetActiveArgs {
-    pub label: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RenameLabelArgs {
-    pub from: Option<String>,
-    pub to: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema, Default)]
-pub struct EmptyArgs {}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum ExportFormat {
-    Bech32,
-    Hex,
-    Both,
-}
-
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ExportResult {
     pub label: String,
@@ -365,19 +324,6 @@ pub struct ExportResult {
     pub private_key_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ExportArgs {
-    pub label: Option<String>,
-    #[serde(default = "default_export_format")]
-    pub format: ExportFormat,
-    #[serde(default)]
-    pub include_private: bool,
-}
-
-fn default_export_format() -> ExportFormat {
-    ExportFormat::Bech32
 }
 
 async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> Result<(), CoreError> {
@@ -398,9 +344,10 @@ fn normalize_label(label: String) -> Result<String, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ExportFormat, KeyStore};
+    use super::KeyStore;
     use crate::secrets::InMemorySecretStore;
     use nostr::prelude::{Keys, ToBech32};
+    use nostr_mcp_types::key_store::ExportFormat;
     use std::sync::Arc;
     use tempfile::tempdir;
 
@@ -467,9 +414,10 @@ mod tests {
             .export_key(Some("watch".to_string()), ExportFormat::Bech32, true)
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("private key not found in secure storage"));
+        assert!(
+            err.to_string()
+                .contains("private key not found in secure storage")
+        );
     }
 
     #[tokio::test]

@@ -2,38 +2,8 @@ use std::borrow::Cow;
 
 use crate::error::CoreError;
 use nostr::nips::nip22::CommentTarget;
+use nostr_mcp_types::replies::{PostCommentArgs, PostReplyArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostReplyArgs {
-    pub content: String,
-    pub reply_to_id: String,
-    pub reply_to_pubkey: String,
-    pub reply_to_kind: u16,
-    pub root_event_id: Option<String>,
-    pub root_event_pubkey: Option<String>,
-    pub root_event_kind: Option<u16>,
-    pub mentioned_pubkeys: Option<Vec<String>>,
-    pub relay_hint: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostCommentArgs {
-    pub content: String,
-    pub root_event_id: String,
-    pub root_event_pubkey: String,
-    pub root_event_kind: u16,
-    pub parent_event_id: Option<String>,
-    pub parent_event_pubkey: Option<String>,
-    pub parent_event_kind: Option<u16>,
-    pub relay_hint: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
 
 fn parse_event_id(id: &str) -> Result<EventId, CoreError> {
     EventId::parse(id.trim())
@@ -285,7 +255,8 @@ fn comment_target(
 
 #[cfg(test)]
 mod tests {
-    use super::{comment_tags, nip10_tags, nip22_tags_from_reply, PostCommentArgs, PostReplyArgs};
+    use super::{comment_tags, nip10_tags, nip22_tags_from_reply};
+    use nostr_mcp_types::replies::{PostCommentArgs, PostReplyArgs};
 
     #[test]
     fn nip10_reply_includes_root_tag() {
@@ -305,9 +276,11 @@ mod tests {
 
         let tags = nip10_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.get(3).map(|v| v == "root").unwrap_or(false)));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.get(3).map(|v| v == "root").unwrap_or(false))
+        );
     }
 
     #[test]
@@ -327,18 +300,26 @@ mod tests {
 
         let tags = comment_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "E").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "K").unwrap_or(false)));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "E").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "K").unwrap_or(false))
+        );
     }
 
     #[test]
@@ -359,11 +340,15 @@ mod tests {
 
         let tags = nip22_tags_from_reply(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.len() >= 2 && tag[0] == "K" && tag[1] == "30023"));
-        assert!(values
-            .iter()
-            .any(|tag| tag.len() >= 2 && tag[0] == "k" && tag[1] == "1111"));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.len() >= 2 && tag[0] == "K" && tag[1] == "30023")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.len() >= 2 && tag[0] == "k" && tag[1] == "1111")
+        );
     }
 }

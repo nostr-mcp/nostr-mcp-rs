@@ -1,15 +1,20 @@
-use super::{core_error, invalid_params, NostrMcpServer};
+use super::{NostrMcpServer, core_error, invalid_params};
 use nostr_mcp_core::client::ActiveClient;
 use nostr_mcp_core::error::CoreError;
-use nostr_mcp_core::polls::{create_poll, vote_poll, CreatePollArgs, VotePollArgs};
+use nostr_mcp_core::polls::{create_poll, vote_poll};
 use nostr_mcp_core::publish::{
     create_text_event, delete_events, post_anonymous_note, post_group_chat, post_long_form,
     post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
-    sign_unsigned_event, CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs,
-    PostLongFormArgs, PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs,
-    PublishSignedEventArgs, SignEventArgs,
+    sign_unsigned_event,
 };
-use nostr_mcp_core::replies::{post_comment, post_reply, PostCommentArgs, PostReplyArgs};
+use nostr_mcp_core::replies::{post_comment, post_reply};
+use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
+use nostr_mcp_types::publish::{
+    CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
+    PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
+    SignEventArgs,
+};
+use nostr_mcp_types::replies::{PostCommentArgs, PostReplyArgs};
 use nostr_sdk::prelude::*;
 use rmcp::{
     handler::server::wrapper::Parameters,

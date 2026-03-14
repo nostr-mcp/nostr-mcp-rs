@@ -1,100 +1,10 @@
 use crate::error::CoreError;
-use crate::publish::{publish_event_builder, SendResult};
+use crate::publish::{SendResult, publish_event_builder};
+use nostr_mcp_types::groups::{
+    CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
+    JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs,
+};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PutUserArgs {
-    pub content: String,
-    pub group_id: String,
-    pub pubkey: String,
-    pub roles: Option<Vec<String>>,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RemoveUserArgs {
-    pub content: String,
-    pub group_id: String,
-    pub pubkey: String,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct EditGroupMetadataArgs {
-    pub content: String,
-    pub group_id: String,
-    pub name: Option<String>,
-    pub picture: Option<String>,
-    pub about: Option<String>,
-    pub unrestricted: Option<bool>,
-    pub visible: Option<bool>,
-    pub public: Option<bool>,
-    pub open: Option<bool>,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteEventArgs {
-    pub content: String,
-    pub group_id: String,
-    pub event_id: String,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateGroupArgs {
-    pub content: String,
-    pub group_id: String,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteGroupArgs {
-    pub content: String,
-    pub group_id: String,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateInviteArgs {
-    pub content: String,
-    pub group_id: String,
-    pub code: Option<String>,
-    pub previous_refs: Option<Vec<String>>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct JoinGroupArgs {
-    pub content: String,
-    pub group_id: String,
-    pub invite_code: Option<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct LeaveGroupArgs {
-    pub content: String,
-    pub group_id: String,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
 
 pub async fn put_user(client: &Client, args: PutUserArgs) -> Result<SendResult, CoreError> {
     let tags = put_user_tags(&args)?;
@@ -460,8 +370,8 @@ fn leave_group_tags(args: &LeaveGroupArgs) -> Result<Vec<Tag>, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        create_invite_tags, delete_event_tags, edit_group_metadata_tags, put_user_tags,
+    use super::{create_invite_tags, delete_event_tags, edit_group_metadata_tags, put_user_tags};
+    use nostr_mcp_types::groups::{
         CreateInviteArgs, DeleteEventArgs, EditGroupMetadataArgs, PutUserArgs,
     };
     use nostr_sdk::prelude::*;
@@ -481,15 +391,21 @@ mod tests {
 
         let tags = put_user_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "h").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "previous").unwrap_or(false)));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "h").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "p").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "previous").unwrap_or(false))
+        );
     }
 
     #[test]
@@ -511,24 +427,36 @@ mod tests {
 
         let tags = edit_group_metadata_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "public").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "open").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "unrestricted").unwrap_or(false)));
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "visible").unwrap_or(false)));
-        assert!(!values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "private").unwrap_or(false)));
-        assert!(!values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "closed").unwrap_or(false)));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "public").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "open").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "unrestricted").unwrap_or(false))
+        );
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "visible").unwrap_or(false))
+        );
+        assert!(
+            !values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "private").unwrap_or(false))
+        );
+        assert!(
+            !values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "closed").unwrap_or(false))
+        );
     }
 
     #[test]
@@ -544,9 +472,11 @@ mod tests {
 
         let tags = create_invite_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| { tag.len() == 2 && tag[0] == "code" && tag[1] == "invite-code" }));
+        assert!(
+            values
+                .iter()
+                .any(|tag| { tag.len() == 2 && tag[0] == "code" && tag[1] == "invite-code" })
+        );
     }
 
     #[test]
@@ -563,9 +493,11 @@ mod tests {
 
         let tags = delete_event_tags(&args).unwrap();
         let values: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
-        assert!(values
-            .iter()
-            .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false)));
+        assert!(
+            values
+                .iter()
+                .any(|tag| tag.first().map(|v| v == "e").unwrap_or(false))
+        );
     }
 
     #[test]
@@ -582,8 +514,9 @@ mod tests {
         };
 
         let err = put_user_tags(&args).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("previous_refs entries must be 8-character hex prefixes"));
+        assert!(
+            err.to_string()
+                .contains("previous_refs entries must be 8-character hex prefixes")
+        );
     }
 }

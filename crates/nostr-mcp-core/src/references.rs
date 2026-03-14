@@ -1,11 +1,6 @@
 use nostr::nips::nip19::{FromBech32, Nip19};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ParseReferencesArgs {
-    pub content: String,
-}
+use nostr_mcp_types::references::ParseReferencesArgs;
+use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct ParseReferencesResult {
@@ -164,8 +159,9 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_nostr_references, ParseReferencesArgs, ReferenceType};
+    use super::{extract_nostr_references, ReferenceType};
     use nostr::prelude::*;
+    use nostr_mcp_types::references::ParseReferencesArgs;
 
     #[test]
     fn parse_text_references_finds_multiple_mentions() {

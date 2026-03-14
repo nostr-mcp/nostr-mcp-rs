@@ -1,11 +1,11 @@
-use super::{core_error, invalid_params, NostrMcpServer};
+use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::key_store::EmptyArgs;
 use nostr_mcp_core::metadata::{
-    args_to_profile, fetch_metadata, fetch_profile, publish_metadata, FetchMetadataArgs,
-    MetadataResult, ProfileGetArgs, SetMetadataArgs,
+    MetadataResult, args_to_profile, fetch_metadata, fetch_profile, publish_metadata,
 };
 use nostr_mcp_core::settings::{KeySettings, ProfileMetadata, SettingsStore};
+use nostr_mcp_types::common::EmptyArgs;
+use nostr_mcp_types::metadata::{FetchMetadataArgs, ProfileGetArgs, SetMetadataArgs};
 use nostr_sdk::prelude::*;
 use rmcp::{
     handler::server::wrapper::Parameters,

@@ -1,40 +1,9 @@
 use crate::error::CoreError;
 use crate::settings::ProfileMetadata;
+use nostr_mcp_types::metadata::{ProfileGetArgs, SetMetadataArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetMetadataArgs {
-    pub name: Option<String>,
-    pub display_name: Option<String>,
-    pub about: Option<String>,
-    pub picture: Option<String>,
-    pub banner: Option<String>,
-    pub nip05: Option<String>,
-    pub lud06: Option<String>,
-    pub lud16: Option<String>,
-    pub website: Option<String>,
-    pub publish: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct FetchMetadataArgs {
-    pub label: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ProfileGetArgs {
-    pub pubkey: String,
-    pub timeout_secs: Option<u64>,
-}
-
-impl ProfileGetArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct MetadataResult {
@@ -206,7 +175,8 @@ fn parse_pubkey(value: &str) -> Result<PublicKey, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{args_to_profile, parse_pubkey, profile_to_nostr_metadata, SetMetadataArgs};
+    use super::{args_to_profile, parse_pubkey, profile_to_nostr_metadata};
+    use nostr_mcp_types::metadata::SetMetadataArgs;
     use nostr_sdk::prelude::*;
 
     #[test]

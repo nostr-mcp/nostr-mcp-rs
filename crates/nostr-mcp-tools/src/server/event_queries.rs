@@ -1,15 +1,20 @@
-use super::{core_error, invalid_params, NostrMcpServer};
+use super::{NostrMcpServer, core_error, invalid_params};
 use nostr_mcp_core::client::ActiveClient;
 use nostr_mcp_core::events::{
     list_events, list_long_form_events, query_events, search_events,
     subscription_targets_mentions_me, subscription_targets_my_metadata,
-    subscription_targets_my_notes, EventsListArgs, LongFormListArgs, QueryEventsArgs,
-    SearchEventsArgs,
+    subscription_targets_my_notes,
 };
 use nostr_mcp_core::nip01;
-use nostr_mcp_core::nip30::{parse_nip30_emojis, Nip30ParseArgs};
-use nostr_mcp_core::polls::{get_poll_results, GetPollResultsArgs};
-use nostr_mcp_core::references::{parse_text_references, ParseReferencesArgs};
+use nostr_mcp_core::nip30::parse_nip30_emojis;
+use nostr_mcp_core::polls::get_poll_results;
+use nostr_mcp_core::references::parse_text_references;
+use nostr_mcp_types::events::{
+    EventsListArgs, LongFormListArgs, QueryEventsArgs, SearchEventsArgs,
+};
+use nostr_mcp_types::nip30::Nip30ParseArgs;
+use nostr_mcp_types::polls::GetPollResultsArgs;
+use nostr_mcp_types::references::ParseReferencesArgs;
 use nostr_sdk::prelude::*;
 use rmcp::{
     handler::server::wrapper::Parameters,

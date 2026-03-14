@@ -248,16 +248,17 @@ pub async fn start_stdio_server_with_runtime(
 #[cfg(test)]
 mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer};
-    use nostr_mcp_core::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
-    use nostr_mcp_core::key_store::{
-        EmptyArgs, ExportArgs, ExportFormat, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+    use nostr_mcp_types::common::EmptyArgs;
+    use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
+    use nostr_mcp_types::key_store::{
+        ExportArgs, ExportFormat, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
     };
-    use nostr_mcp_core::keys::{DerivePublicArgs, VerifyArgs};
-    use nostr_mcp_core::metadata::SetMetadataArgs;
-    use nostr_mcp_core::nip30::Nip30ParseArgs;
-    use nostr_mcp_core::publish::{CreateTextArgs, SignEventArgs};
-    use nostr_mcp_core::references::ParseReferencesArgs;
-    use nostr_mcp_core::settings::FollowEntry;
+    use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
+    use nostr_mcp_types::metadata::SetMetadataArgs;
+    use nostr_mcp_types::nip30::Nip30ParseArgs;
+    use nostr_mcp_types::publish::{CreateTextArgs, SignEventArgs};
+    use nostr_mcp_types::references::ParseReferencesArgs;
+    use nostr_mcp_types::settings::FollowEntry;
     use rmcp::ServerHandler;
     use rmcp::handler::server::wrapper::Parameters;
     use rmcp::model::CallToolResult;

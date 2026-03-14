@@ -1,74 +1,8 @@
 use crate::error::CoreError;
 use crate::nip01;
+use nostr_mcp_types::events::{LongFormListArgs, QueryEventsArgs, SearchEventsArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde_json::Value;
 use std::collections::HashSet;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct EventsListArgs {
-    pub preset: String,
-    pub limit: Option<u64>,
-    pub timeout_secs: Option<u64>,
-    pub author_npub: Option<String>,
-    pub kind: Option<u16>,
-    pub since: Option<u64>,
-    pub until: Option<u64>,
-}
-
-impl EventsListArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct QueryEventsArgs {
-    pub filters: Vec<Value>,
-    pub timeout_secs: Option<u64>,
-    pub limit: Option<u64>,
-}
-
-impl QueryEventsArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SearchEventsArgs {
-    pub query: String,
-    pub kinds: Option<Vec<u16>>,
-    pub author_npub: Option<String>,
-    pub limit: Option<u64>,
-    pub since: Option<u64>,
-    pub until: Option<u64>,
-    pub timeout_secs: Option<u64>,
-}
-
-impl SearchEventsArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct LongFormListArgs {
-    pub author_npub: Option<String>,
-    pub identifier: Option<String>,
-    pub hashtags: Option<Vec<String>>,
-    pub limit: Option<u64>,
-    pub since: Option<u64>,
-    pub until: Option<u64>,
-    pub timeout_secs: Option<u64>,
-}
-
-impl LongFormListArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
 
 pub async fn subscription_targets_my_notes(
     pk: PublicKey,
@@ -299,9 +233,9 @@ fn validate_filter_bounds(filter: &Filter) -> Result<(), CoreError> {
 mod tests {
     use super::{
         long_form_filter, parse_filters, search_filter, subscription_targets_mentions_me,
-        subscription_targets_my_metadata, subscription_targets_my_notes, LongFormListArgs,
-        QueryEventsArgs, SearchEventsArgs,
+        subscription_targets_my_metadata, subscription_targets_my_notes,
     };
+    use nostr_mcp_types::events::{LongFormListArgs, QueryEventsArgs, SearchEventsArgs};
     use nostr_sdk::prelude::*;
     use serde_json::json;
 
@@ -324,11 +258,13 @@ mod tests {
         let filter = subscription_targets_mentions_me(pk, None, None).await;
         assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
         let p_tag = SingleLetterTag::lowercase(Alphabet::P);
-        assert!(filter
-            .generic_tags
-            .get(&p_tag)
-            .unwrap()
-            .contains(&pk.to_hex()));
+        assert!(
+            filter
+                .generic_tags
+                .get(&p_tag)
+                .unwrap()
+                .contains(&pk.to_hex())
+        );
         assert!(filter.since.is_some());
     }
 
@@ -393,9 +329,10 @@ mod tests {
         };
 
         let err = long_form_filter(&args).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("at least one of author_npub, identifier, or hashtags is required"));
+        assert!(
+            err.to_string()
+                .contains("at least one of author_npub, identifier, or hashtags is required")
+        );
     }
 
     #[test]
@@ -419,24 +356,30 @@ mod tests {
         assert_eq!(filter.limit, Some(5));
         assert_eq!(filter.since, Some(Timestamp::from(10)));
         assert_eq!(filter.until, Some(Timestamp::from(20)));
-        assert!(filter
-            .authors
-            .as_ref()
-            .unwrap()
-            .contains(&keys.public_key()));
+        assert!(
+            filter
+                .authors
+                .as_ref()
+                .unwrap()
+                .contains(&keys.public_key())
+        );
 
         let hashtag_tag = SingleLetterTag::lowercase(Alphabet::T);
         let identifier_tag = SingleLetterTag::lowercase(Alphabet::D);
-        assert!(filter
-            .generic_tags
-            .get(&hashtag_tag)
-            .unwrap()
-            .contains("nostr"));
-        assert!(filter
-            .generic_tags
-            .get(&identifier_tag)
-            .unwrap()
-            .contains("post-1"));
+        assert!(
+            filter
+                .generic_tags
+                .get(&hashtag_tag)
+                .unwrap()
+                .contains("nostr")
+        );
+        assert!(
+            filter
+                .generic_tags
+                .get(&identifier_tag)
+                .unwrap()
+                .contains("post-1")
+        );
     }
 
     #[test]

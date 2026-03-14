@@ -1,29 +1,8 @@
 use crate::error::CoreError;
-use crate::settings::FollowEntry;
+use nostr_mcp_types::settings::FollowEntry;
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetFollowsArgs {
-    pub follows: Vec<FollowEntry>,
-    pub publish: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AddFollowArgs {
-    pub pubkey: String,
-    pub relay_url: Option<String>,
-    pub petname: Option<String>,
-    pub publish: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RemoveFollowArgs {
-    pub pubkey: String,
-    pub publish: Option<bool>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct FollowsResult {
@@ -163,7 +142,7 @@ pub async fn sync_follows(
 #[cfg(test)]
 mod tests {
     use super::{follows_to_tags, tags_to_follows};
-    use crate::settings::FollowEntry;
+    use nostr_mcp_types::settings::FollowEntry;
 
     #[test]
     fn follows_tags_round_trip() {

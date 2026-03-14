@@ -1,11 +1,10 @@
-use super::{core_error, invalid_params, NostrMcpServer};
+use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::follows::{
-    fetch_follows, publish_follows, AddFollowArgs, PublishFollowsResult, RemoveFollowArgs,
-    SetFollowsArgs,
-};
-use nostr_mcp_core::key_store::EmptyArgs;
-use nostr_mcp_core::settings::{FollowEntry, KeySettings, SettingsStore};
+use nostr_mcp_core::follows::{PublishFollowsResult, fetch_follows, publish_follows};
+use nostr_mcp_core::settings::{KeySettings, SettingsStore};
+use nostr_mcp_types::common::EmptyArgs;
+use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
+use nostr_mcp_types::settings::FollowEntry;
 use nostr_sdk::prelude::*;
 use rmcp::{
     handler::server::wrapper::Parameters,

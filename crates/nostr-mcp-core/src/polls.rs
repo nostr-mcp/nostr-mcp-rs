@@ -1,42 +1,11 @@
 use crate::error::CoreError;
-use crate::publish::{publish_event_builder, SendResult};
+use crate::publish::{SendResult, publish_event_builder};
 use nostr::nips::nip88::{Poll, PollOption as Nip88PollOption, PollResponse, PollType};
+use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
 use nostr_sdk::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub struct PollOption {
-    pub option_id: String,
-    pub label: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreatePollArgs {
-    pub question: String,
-    pub options: Vec<PollOption>,
-    pub relay_urls: Vec<String>,
-    pub poll_type: Option<String>,
-    pub ends_at: Option<u64>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct VotePollArgs {
-    pub poll_event_id: String,
-    pub option_ids: Vec<String>,
-    pub pow: Option<u8>,
-    pub to_relays: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetPollResultsArgs {
-    pub poll_event_id: String,
-    pub timeout_secs: Option<u64>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct PollResultOption {

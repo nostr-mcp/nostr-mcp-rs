@@ -1,23 +1,11 @@
 use crate::error::CoreError;
-use nostr::nips::nip05::{verify_from_raw_json, Nip05Address, Nip05Profile};
+use nostr::nips::nip05::{Nip05Address, Nip05Profile, verify_from_raw_json};
 use nostr::prelude::{FromBech32, PublicKey, ToBech32};
-use reqwest::header::ACCEPT;
+use nostr_mcp_types::nip05::{Nip05ResolveArgs, Nip05VerifyArgs};
 use reqwest::Client;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use reqwest::header::ACCEPT;
+use serde::Serialize;
 use std::time::Duration;
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip05ResolveArgs {
-    pub identifier: String,
-    pub timeout_secs: Option<u64>,
-}
-
-impl Nip05ResolveArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct Nip05ResolveResult {
@@ -27,19 +15,6 @@ pub struct Nip05ResolveResult {
     pub pubkey_npub: String,
     pub relays: Vec<String>,
     pub nip46_relays: Vec<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip05VerifyArgs {
-    pub identifier: String,
-    pub pubkey: String,
-    pub timeout_secs: Option<u64>,
-}
-
-impl Nip05VerifyArgs {
-    pub fn timeout(&self) -> u64 {
-        self.timeout_secs.unwrap_or(10)
-    }
 }
 
 #[derive(Debug, Serialize)]
@@ -133,9 +108,10 @@ async fn fetch_nip05_raw_json(url: &str, timeout_secs: u64) -> Result<String, Co
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_pubkey, Nip05ResolveArgs};
+    use super::parse_pubkey;
     use nostr::nips::nip05::Nip05Address;
     use nostr::prelude::{Keys, ToBech32};
+    use nostr_mcp_types::nip05::Nip05ResolveArgs;
 
     #[test]
     fn parse_pubkey_accepts_npub_and_hex() {
@@ -153,10 +129,12 @@ mod tests {
     #[test]
     fn nip05_address_builds_url() {
         let address = Nip05Address::parse("bob@example.com").unwrap();
-        assert!(address
-            .url()
-            .as_str()
-            .contains("/.well-known/nostr.json?name=bob"));
+        assert!(
+            address
+                .url()
+                .as_str()
+                .contains("/.well-known/nostr.json?name=bob")
+        );
     }
 
     #[test]

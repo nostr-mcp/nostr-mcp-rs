@@ -19,6 +19,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 keyring = { workspace = true, optional = true }
 nostr = { workspace = true }
+nostr-mcp-types = { workspace = true }
 nostr-relay-pool = { workspace = true }
 nostr-sdk = { workspace = true }
 rand = { workspace = true }
