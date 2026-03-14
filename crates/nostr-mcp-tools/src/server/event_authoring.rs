@@ -90,7 +90,7 @@ impl NostrMcpServer {
             .client
             .signer()
             .await
-            .map_err(|err| core_error(CoreError::Nostr(format!("get signer: {err}"))))?;
+            .map_err(|err| core_error(CoreError::operation(format!("get signer: {err}"))))?;
 
         let result = EventAuthoringService::sign_unsigned(&signer, args)
             .await

@@ -70,16 +70,16 @@ async fn fetch_nip05_raw_json(url: &str, timeout_secs: u64) -> Result<String, Co
         .timeout(Duration::from_secs(timeout_secs))
         .send()
         .await
-        .map_err(|e| CoreError::Nostr(format!("nip05 request: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("nip05 request: {e}")))?;
 
     let status = response.status();
     let body = response
         .text()
         .await
-        .map_err(|e| CoreError::Nostr(format!("nip05 body: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("nip05 body: {e}")))?;
 
     if !status.is_success() {
-        return Err(CoreError::Nostr(format!(
+        return Err(CoreError::operation(format!(
             "nip05 status {}: {}",
             status.as_u16(),
             body

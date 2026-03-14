@@ -1,14 +1,14 @@
+use super::error::{HostRuntimeError, HostRuntimeResult};
 use super::fs::ensure_parent_dir;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD_NO_PAD as B64;
-use nostr_mcp_core::error::CoreError;
 use rand::RngCore;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use zeroize::Zeroize;
 
-pub fn ensure_keystore_secret(path: &Path) -> Result<Vec<u8>, CoreError> {
+pub fn ensure_keystore_secret(path: &Path) -> HostRuntimeResult<Vec<u8>> {
     ensure_parent_dir(path)?;
     if !path.exists() {
         let mut buf = [0u8; 32];
@@ -19,25 +19,25 @@ pub fn ensure_keystore_secret(path: &Path) -> Result<Vec<u8>, CoreError> {
             .write(true)
             .truncate(true)
             .open(path)
-            .map_err(|e| CoreError::Io(format!("opening {}: {e}", path.display())))?;
+            .map_err(|e| HostRuntimeError::io(format!("opening {}: {e}", path.display())))?;
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
         }
         f.write_all(b64.as_bytes())
-            .map_err(|e| CoreError::Io(format!("writing keystore secret: {e}")))?;
+            .map_err(|e| HostRuntimeError::io(format!("writing keystore secret: {e}")))?;
         let _ = f.flush();
     }
 
-    let mut f =
-        File::open(path).map_err(|e| CoreError::Io(format!("opening {}: {e}", path.display())))?;
+    let mut f = File::open(path)
+        .map_err(|e| HostRuntimeError::io(format!("opening {}: {e}", path.display())))?;
     let mut s = String::new();
     f.read_to_string(&mut s)
-        .map_err(|e| CoreError::Io(format!("reading {}: {e}", path.display())))?;
+        .map_err(|e| HostRuntimeError::io(format!("reading {}: {e}", path.display())))?;
     let bytes = B64
         .decode(s.trim())
-        .map_err(|e| CoreError::Base64(format!("decoding keystore secret: {e}")))?;
+        .map_err(|e| HostRuntimeError::encoding(format!("decoding keystore secret: {e}")))?;
     s.zeroize();
     Ok(bytes)
 }

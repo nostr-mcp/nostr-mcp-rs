@@ -9,6 +9,7 @@ mod protocol_utils;
 mod relays;
 
 use crate::host_runtime::client::{ActiveClient, ClientStore};
+use crate::host_runtime::error::{HostRuntimeError, HostRuntimeResult};
 use crate::host_runtime::key_store::KeyStore;
 #[cfg(not(feature = "keyring"))]
 use crate::host_runtime::secrets::InMemorySecretStore;
@@ -50,14 +51,14 @@ fn secret_store(runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
 async fn load_or_init_keystore(
     paths: &NostrMcpPaths,
     runtime: &NostrMcpRuntime,
-) -> Result<KeyStore, CoreError> {
+) -> HostRuntimeResult<KeyStore> {
     let pass = Arc::new(util::ensure_keystore_secret(
         paths.keystore_secret_path.as_path(),
     )?);
     KeyStore::load_or_init(paths.index_path.clone(), pass, secret_store(runtime)).await
 }
 
-async fn load_or_init_settings(paths: &NostrMcpPaths) -> Result<SettingsStore, CoreError> {
+async fn load_or_init_settings(paths: &NostrMcpPaths) -> HostRuntimeResult<SettingsStore> {
     let pass = Arc::new(util::ensure_keystore_secret(
         paths.keystore_secret_path.as_path(),
     )?);
@@ -65,10 +66,17 @@ async fn load_or_init_settings(paths: &NostrMcpPaths) -> Result<SettingsStore, C
 }
 
 fn core_error(err: CoreError) -> ErrorData {
-    match err {
-        CoreError::InvalidInput(msg) => ErrorData::invalid_params(msg, None),
-        _ => ErrorData::internal_error(err.to_string(), None),
+    if let CoreError::InvalidInput(msg) = err {
+        return ErrorData::invalid_params(msg, None);
     }
+    ErrorData::internal_error(err.to_string(), None)
+}
+
+fn host_runtime_error(err: HostRuntimeError) -> ErrorData {
+    if let HostRuntimeError::InvalidInput(msg) = err {
+        return ErrorData::invalid_params(msg, None);
+    }
+    ErrorData::internal_error(err.to_string(), None)
 }
 
 fn invalid_params<E: ToString>(err: E) -> ErrorData {
@@ -113,7 +121,7 @@ impl ServerContext {
         }
     }
 
-    async fn stores(&self) -> Result<&ServerStores, CoreError> {
+    async fn stores(&self) -> HostRuntimeResult<&ServerStores> {
         let runtime = self.runtime.clone();
         self.stores
             .get_or_try_init(move || {
@@ -138,7 +146,7 @@ pub struct NostrMcpServer {
 }
 
 impl NostrMcpServer {
-    async fn initialize(&self) -> Result<(), CoreError> {
+    async fn initialize(&self) -> HostRuntimeResult<()> {
         self.context.stores().await?;
         Ok(())
     }
@@ -210,7 +218,7 @@ impl NostrMcpServer {
                 Some(active_key) => keystore
                     .secrets()
                     .get(&active_key.label)
-                    .map_err(core_error)?
+                    .map_err(host_runtime_error)?
                     .is_some(),
                 None => false,
             };
@@ -236,12 +244,12 @@ impl NostrMcpServer {
     }
 
     async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
-        let stores = self.context.stores().await.map_err(core_error)?;
+        let stores = self.context.stores().await.map_err(host_runtime_error)?;
         Ok(stores.keystore.clone())
     }
 
     async fn settings_store(&self) -> Result<Arc<SettingsStore>, ErrorData> {
-        let stores = self.context.stores().await.map_err(core_error)?;
+        let stores = self.context.stores().await.map_err(host_runtime_error)?;
         Ok(stores.settings_store.clone())
     }
 
@@ -254,16 +262,20 @@ impl NostrMcpServer {
             .client_store
             .ensure_client(keystore, settings_store)
             .await
-            .map_err(core_error)
+            .map_err(host_runtime_error)
     }
 
     async fn reset_client(&self) -> Result<(), ErrorData> {
-        self.context.client_store.reset().await.map_err(core_error)
+        self.context
+            .client_store
+            .reset()
+            .await
+            .map_err(host_runtime_error)
     }
 
     #[cfg(test)]
     async fn client(&self) -> Result<ActiveClient, ErrorData> {
-        let stores = self.context.stores().await.map_err(core_error)?;
+        let stores = self.context.stores().await.map_err(host_runtime_error)?;
         self.ensure_client_from(stores.keystore.clone(), stores.settings_store.clone())
             .await
     }

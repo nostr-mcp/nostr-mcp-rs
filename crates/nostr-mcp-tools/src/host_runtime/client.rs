@@ -1,7 +1,7 @@
+use super::error::{HostRuntimeError, HostRuntimeResult};
 use super::key_store::KeyStore;
 use super::settings::{KeySettings, SettingsStore};
 use nostr::prelude::*;
-use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::follows;
 use nostr_sdk::prelude::*;
 use std::sync::Arc;
@@ -37,20 +37,20 @@ impl Default for ClientStore {
 async fn build_from_keystore(
     ks: &KeyStore,
     settings_store: &SettingsStore,
-) -> Result<Option<ActiveClient>, CoreError> {
+) -> HostRuntimeResult<Option<ActiveClient>> {
     let active = ks.get_active().await;
     let Some(active_entry) = active else {
         return Ok(None);
     };
     let label = active_entry.label.clone();
     let pubkey = PublicKey::from_bech32(&active_entry.public_key)
-        .map_err(|e| CoreError::invalid_input(format!("invalid active public key: {e}")))?;
+        .map_err(|e| HostRuntimeError::invalid_input(format!("invalid active public key: {e}")))?;
 
     let secrets = ks.secrets();
     let maybe_nsec = secrets.get(&label)?;
     let client = if let Some(nsec) = maybe_nsec {
         let keys = Keys::parse(&nsec).map_err(|e| {
-            CoreError::invalid_input(format!("invalid stored secret for '{label}': {e}"))
+            HostRuntimeError::invalid_input(format!("invalid stored secret for '{label}': {e}"))
         })?;
 
         Client::builder()
@@ -110,11 +110,11 @@ impl ClientStore {
         &self,
         ks: Arc<KeyStore>,
         settings_store: Arc<SettingsStore>,
-    ) -> Result<ActiveClient, CoreError> {
+    ) -> HostRuntimeResult<ActiveClient> {
         let cell = self
             .client_cell
             .get_or_try_init(|| async {
-                Ok::<RwLock<Option<ActiveClient>>, CoreError>(RwLock::new(None))
+                Ok::<RwLock<Option<ActiveClient>>, HostRuntimeError>(RwLock::new(None))
             })
             .await?;
         {
@@ -128,7 +128,7 @@ impl ClientStore {
         }
         let _g = self
             .build_lock
-            .get_or_try_init(|| async { Ok::<Mutex<()>, CoreError>(Mutex::new(())) })
+            .get_or_try_init(|| async { Ok::<Mutex<()>, HostRuntimeError>(Mutex::new(())) })
             .await?
             .lock()
             .await;
@@ -149,13 +149,13 @@ impl ClientStore {
             }
             Ok(ac)
         } else {
-            Err(CoreError::invalid_input(
+            Err(HostRuntimeError::invalid_input(
                 "no active nostr key; set one with nostr_keys_set_active",
             ))
         }
     }
 
-    pub async fn reset(&self) -> Result<(), CoreError> {
+    pub async fn reset(&self) -> HostRuntimeResult<()> {
         if let Some(cell) = self.client_cell.get() {
             let mut w = cell.write().await;
             *w = None;

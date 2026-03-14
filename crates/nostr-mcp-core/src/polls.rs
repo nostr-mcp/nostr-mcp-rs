@@ -99,7 +99,7 @@ pub async fn get_poll_results(
     let poll_events = client
         .fetch_events(poll_filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::Nostr(format!("fetch poll: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch poll: {e}")))?;
 
     let poll_event = poll_events
         .iter()
@@ -116,7 +116,7 @@ pub async fn get_poll_results(
     let vote_events = client
         .fetch_events(vote_filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::Nostr(format!("fetch votes: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch votes: {e}")))?;
 
     let options_map: HashMap<String, String> = poll
         .options

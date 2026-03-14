@@ -1,4 +1,4 @@
-use super::{NostrMcpServer, core_error};
+use super::{NostrMcpServer, core_error, host_runtime_error};
 use nostr_mcp_core::keys::{derive_public, verify_key};
 use nostr_mcp_policy::{CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
@@ -32,7 +32,7 @@ impl NostrMcpServer {
                 args.persist_secret.unwrap_or(true),
             )
             .await
-            .map_err(core_error)?;
+            .map_err(host_runtime_error)?;
         self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
@@ -58,7 +58,7 @@ impl NostrMcpServer {
                 args.persist_secret.unwrap_or(true),
             )
             .await
-            .map_err(core_error)?;
+            .map_err(host_runtime_error)?;
         self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
@@ -72,7 +72,10 @@ impl NostrMcpServer {
         self.authorize_policy_request(self.capability_request(CapabilityScope::ManageIdentity))
             .await?;
         let keystore = self.keystore().await?;
-        let removed = keystore.remove(args.label).await.map_err(core_error)?;
+        let removed = keystore
+            .remove(args.label)
+            .await
+            .map_err(host_runtime_error)?;
         self.reset_client().await?;
         let content = Content::json(serde_json::json!(KeyRemovalResult {
             removed: removed.is_some(),
@@ -105,7 +108,10 @@ impl NostrMcpServer {
         self.authorize_policy_request(self.capability_request(CapabilityScope::ManageIdentity))
             .await?;
         let keystore = self.keystore().await?;
-        let entry = keystore.set_active(args.label).await.map_err(core_error)?;
+        let entry = keystore
+            .set_active(args.label)
+            .await
+            .map_err(host_runtime_error)?;
         self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
@@ -141,7 +147,7 @@ impl NostrMcpServer {
         let entry = keystore
             .rename_label(source, args.to)
             .await
-            .map_err(core_error)?;
+            .map_err(host_runtime_error)?;
         self.reset_client().await?;
         let content = Content::json(serde_json::json!(entry))?;
         Ok(CallToolResult::success(vec![content]))
@@ -167,7 +173,7 @@ impl NostrMcpServer {
         let result = keystore
             .export_key(args.label, args.format, args.include_private)
             .await
-            .map_err(core_error)?;
+            .map_err(host_runtime_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

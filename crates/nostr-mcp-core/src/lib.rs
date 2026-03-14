@@ -26,4 +26,4 @@ pub mod relay_info;
 pub mod relays;
 pub mod replies;
 
-pub use error::CoreError;
+pub use error::{CoreError, CoreResult};

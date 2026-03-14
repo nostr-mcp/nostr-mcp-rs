@@ -1,11 +1,11 @@
-use nostr_mcp_core::error::CoreError;
+use super::error::{HostRuntimeError, HostRuntimeResult};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub trait SecretStore: Send + Sync {
-    fn set(&self, label: &str, secret: &str) -> Result<(), CoreError>;
-    fn get(&self, label: &str) -> Result<Option<String>, CoreError>;
-    fn delete(&self, label: &str) -> Result<(), CoreError>;
+    fn set(&self, label: &str, secret: &str) -> HostRuntimeResult<()>;
+    fn get(&self, label: &str) -> HostRuntimeResult<Option<String>>;
+    fn delete(&self, label: &str) -> HostRuntimeResult<()>;
 }
 
 #[derive(Clone, Default)]
@@ -20,28 +20,28 @@ impl InMemorySecretStore {
 }
 
 impl SecretStore for InMemorySecretStore {
-    fn set(&self, label: &str, secret: &str) -> Result<(), CoreError> {
+    fn set(&self, label: &str, secret: &str) -> HostRuntimeResult<()> {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| CoreError::invalid_input("secret store lock poisoned"))?;
+            .map_err(|_| HostRuntimeError::invalid_input("secret store lock poisoned"))?;
         guard.insert(label.to_string(), secret.to_string());
         Ok(())
     }
 
-    fn get(&self, label: &str) -> Result<Option<String>, CoreError> {
+    fn get(&self, label: &str) -> HostRuntimeResult<Option<String>> {
         let guard = self
             .inner
             .lock()
-            .map_err(|_| CoreError::invalid_input("secret store lock poisoned"))?;
+            .map_err(|_| HostRuntimeError::invalid_input("secret store lock poisoned"))?;
         Ok(guard.get(label).cloned())
     }
 
-    fn delete(&self, label: &str) -> Result<(), CoreError> {
+    fn delete(&self, label: &str) -> HostRuntimeResult<()> {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| CoreError::invalid_input("secret store lock poisoned"))?;
+            .map_err(|_| HostRuntimeError::invalid_input("secret store lock poisoned"))?;
         guard.remove(label);
         Ok(())
     }
@@ -61,37 +61,37 @@ impl KeyringSecretStore {
         }
     }
 
-    fn entry_for(&self, label: &str) -> Result<keyring::Entry, CoreError> {
+    fn entry_for(&self, label: &str) -> HostRuntimeResult<keyring::Entry> {
         keyring::Entry::new(&self.service, label)
-            .map_err(|e| CoreError::Keyring(format!("creating keyring entry: {e}")))
+            .map_err(|e| HostRuntimeError::keyring(format!("creating keyring entry: {e}")))
     }
 }
 
 #[cfg(feature = "keyring")]
 impl SecretStore for KeyringSecretStore {
-    fn set(&self, label: &str, secret: &str) -> Result<(), CoreError> {
+    fn set(&self, label: &str, secret: &str) -> HostRuntimeResult<()> {
         let entry = self.entry_for(label)?;
         entry
             .set_password(secret)
-            .map_err(|e| CoreError::Keyring(format!("storing secret in keyring: {e}")))
+            .map_err(|e| HostRuntimeError::keyring(format!("storing secret in keyring: {e}")))
     }
 
-    fn get(&self, label: &str) -> Result<Option<String>, CoreError> {
+    fn get(&self, label: &str) -> HostRuntimeResult<Option<String>> {
         let entry = self.entry_for(label)?;
         match entry.get_password() {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(CoreError::Keyring(format!(
+            Err(e) => Err(HostRuntimeError::keyring(format!(
                 "retrieving secret from keyring: {e}"
             ))),
         }
     }
 
-    fn delete(&self, label: &str) -> Result<(), CoreError> {
+    fn delete(&self, label: &str) -> HostRuntimeResult<()> {
         let entry = self.entry_for(label)?;
         match entry.delete_password() {
             Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(CoreError::Keyring(format!(
+            Err(e) => Err(HostRuntimeError::keyring(format!(
                 "deleting secret from keyring: {e}"
             ))),
         }

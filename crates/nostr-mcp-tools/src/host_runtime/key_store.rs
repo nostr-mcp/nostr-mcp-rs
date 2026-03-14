@@ -1,9 +1,9 @@
+use super::error::{HostRuntimeError, HostRuntimeResult};
 use super::fs::ensure_parent_dir;
 use super::secrets::SecretStore;
 use super::storage;
 use chrono::Utc;
 use nostr::prelude::*;
-use nostr_mcp_core::error::CoreError;
 use nostr_mcp_types::key_store::{ExportFormat, ExportResult, KeyEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -31,7 +31,7 @@ impl KeyStore {
         path: PathBuf,
         pass: Arc<Vec<u8>>,
         secrets: Arc<dyn SecretStore>,
-    ) -> Result<Self, CoreError> {
+    ) -> HostRuntimeResult<Self> {
         ensure_parent_dir(&path)?;
         let data = if path.exists() {
             storage::decrypt_from_file::<KeyFile>(&path, &pass)?
@@ -46,7 +46,7 @@ impl KeyStore {
         })
     }
 
-    pub async fn persist(&self) -> Result<(), CoreError> {
+    pub async fn persist(&self) -> HostRuntimeResult<()> {
         let data = { self.inner.read().await.clone() };
         storage::encrypt_to_file(&self.path, &self.pass, &data)
     }
@@ -64,24 +64,24 @@ impl KeyStore {
         }
     }
 
-    pub async fn set_active(&self, label: String) -> Result<KeyEntry, CoreError> {
+    pub async fn set_active(&self, label: String) -> HostRuntimeResult<KeyEntry> {
         let label = normalize_label(label)?;
         let mut data = self.inner.write().await;
         if !data.keys.contains_key(&label) {
-            return Err(CoreError::invalid_input("unknown key label"));
+            return Err(HostRuntimeError::invalid_input("unknown key label"));
         }
         data.active = Some(label.clone());
         let entry = data
             .keys
             .get(&label)
             .cloned()
-            .ok_or_else(|| CoreError::invalid_input("unknown key label"))?;
+            .ok_or_else(|| HostRuntimeError::invalid_input("unknown key label"))?;
         drop(data);
         self.persist().await?;
         Ok(entry)
     }
 
-    pub async fn remove(&self, label: String) -> Result<Option<KeyEntry>, CoreError> {
+    pub async fn remove(&self, label: String) -> HostRuntimeResult<Option<KeyEntry>> {
         let label = normalize_label(label)?;
         let mut data = self.inner.write().await;
         let removed = data.keys.remove(&label);
@@ -100,20 +100,21 @@ impl KeyStore {
         secret: String,
         make_active: bool,
         persist_secret: bool,
-    ) -> Result<KeyEntry, CoreError> {
+    ) -> HostRuntimeResult<KeyEntry> {
         let label = normalize_label(label)?;
         let secret = secret.trim();
 
         if secret.starts_with("nsec1") {
-            let keys = Keys::parse(secret).map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            let keys =
+                Keys::parse(secret).map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
             self.insert_keys(label, keys, make_active, persist_secret)
                 .await
         } else if secret.starts_with("npub1") {
             let public_key = PublicKey::from_bech32(secret)
-                .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+                .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
             self.insert_public_key(label, public_key, make_active).await
         } else {
-            Err(CoreError::invalid_input(
+            Err(HostRuntimeError::invalid_input(
                 "unsupported key material; expected nsec1... or npub1...",
             ))
         }
@@ -124,7 +125,7 @@ impl KeyStore {
         label: String,
         make_active: bool,
         persist_secret: bool,
-    ) -> Result<KeyEntry, CoreError> {
+    ) -> HostRuntimeResult<KeyEntry> {
         let label = normalize_label(label)?;
         let keys = Keys::generate();
         self.insert_keys(label, keys, make_active, persist_secret)
@@ -137,17 +138,17 @@ impl KeyStore {
         keys: Keys,
         make_active: bool,
         persist_secret: bool,
-    ) -> Result<KeyEntry, CoreError> {
+    ) -> HostRuntimeResult<KeyEntry> {
         ensure_label_available(&self.inner, &label).await?;
         let public_key = keys
             .public_key()
             .to_bech32()
-            .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
         if persist_secret {
             let mut sk = keys
                 .secret_key()
                 .to_bech32()
-                .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+                .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
             self.secrets.set(&label, &sk)?;
             sk.zeroize();
         }
@@ -171,11 +172,11 @@ impl KeyStore {
         label: String,
         public_key: PublicKey,
         make_active: bool,
-    ) -> Result<KeyEntry, CoreError> {
+    ) -> HostRuntimeResult<KeyEntry> {
         ensure_label_available(&self.inner, &label).await?;
         let public_key = public_key
             .to_bech32()
-            .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
         let entry = KeyEntry {
             label: label.clone(),
             public_key,
@@ -192,23 +193,25 @@ impl KeyStore {
         Ok(entry)
     }
 
-    pub async fn rename_label(&self, from: String, to: String) -> Result<KeyEntry, CoreError> {
+    pub async fn rename_label(&self, from: String, to: String) -> HostRuntimeResult<KeyEntry> {
         let from = normalize_label(from)?;
         let to = normalize_label(to)?;
         if from == to {
-            return Err(CoreError::invalid_input("new label must be different"));
+            return Err(HostRuntimeError::invalid_input(
+                "new label must be different",
+            ));
         }
         let mut data = self.inner.write().await;
         if !data.keys.contains_key(&from) {
-            return Err(CoreError::invalid_input("unknown key label"));
+            return Err(HostRuntimeError::invalid_input("unknown key label"));
         }
         if data.keys.contains_key(&to) {
-            return Err(CoreError::invalid_input("label already exists"));
+            return Err(HostRuntimeError::invalid_input("label already exists"));
         }
         let mut entry = data
             .keys
             .remove(&from)
-            .ok_or_else(|| CoreError::invalid_input("unknown key label"))?;
+            .ok_or_else(|| HostRuntimeError::invalid_input("unknown key label"))?;
         entry.label = to.clone();
         data.keys.insert(to.clone(), entry.clone());
         if data.active.as_deref() == Some(&from) {
@@ -228,26 +231,27 @@ impl KeyStore {
         label: Option<String>,
         format: ExportFormat,
         include_private: bool,
-    ) -> Result<ExportResult, CoreError> {
+    ) -> HostRuntimeResult<ExportResult> {
         let target_label = match label {
             Some(l) => normalize_label(l)?,
             None => {
                 let active = self.get_active().await.ok_or_else(|| {
-                    CoreError::invalid_input("no active key; specify label or set active key")
+                    HostRuntimeError::invalid_input(
+                        "no active key; specify label or set active key",
+                    )
                 })?;
                 active.label
             }
         };
 
         let data = self.inner.read().await;
-        let entry = data
-            .keys
-            .get(&target_label)
-            .ok_or_else(|| CoreError::invalid_input(format!("key not found: {target_label}")))?;
+        let entry = data.keys.get(&target_label).ok_or_else(|| {
+            HostRuntimeError::invalid_input(format!("key not found: {target_label}"))
+        })?;
 
         let public_key_bech32 = entry.public_key.clone();
         let public_key = PublicKey::from_bech32(&public_key_bech32)
-            .map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
 
         let mut result = ExportResult {
             label: target_label.clone(),
@@ -260,19 +264,20 @@ impl KeyStore {
 
         if include_private {
             let secret = self.secrets.get(&target_label)?.ok_or_else(|| {
-                CoreError::invalid_input(format!(
+                HostRuntimeError::invalid_input(format!(
                     "private key not found in secure storage for key: {target_label}"
                 ))
             })?;
 
-            let keys = Keys::parse(&secret).map_err(|e| CoreError::invalid_input(e.to_string()))?;
+            let keys =
+                Keys::parse(&secret).map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
 
             match format {
                 ExportFormat::Bech32 => {
                     result.private_key_nsec = Some(
                         keys.secret_key()
                             .to_bech32()
-                            .map_err(|e| CoreError::invalid_input(e.to_string()))?,
+                            .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?,
                     );
                 }
                 ExportFormat::Hex => {
@@ -282,7 +287,7 @@ impl KeyStore {
                     result.private_key_nsec = Some(
                         keys.secret_key()
                             .to_bech32()
-                            .map_err(|e| CoreError::invalid_input(e.to_string()))?,
+                            .map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?,
                     );
                     result.private_key_hex = Some(keys.secret_key().to_secret_hex());
                 }
@@ -300,18 +305,18 @@ impl KeyStore {
     }
 }
 
-async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> Result<(), CoreError> {
+async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> HostRuntimeResult<()> {
     let data = inner.read().await;
     if data.keys.contains_key(label) {
-        return Err(CoreError::invalid_input("label already exists"));
+        return Err(HostRuntimeError::invalid_input("label already exists"));
     }
     Ok(())
 }
 
-fn normalize_label(label: String) -> Result<String, CoreError> {
+fn normalize_label(label: String) -> HostRuntimeResult<String> {
     let trimmed = label.trim();
     if trimmed.is_empty() {
-        return Err(CoreError::invalid_input("label must not be empty"));
+        return Err(HostRuntimeError::invalid_input("label must not be empty"));
     }
     Ok(trimmed.to_string())
 }

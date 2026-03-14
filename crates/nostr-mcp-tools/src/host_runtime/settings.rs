@@ -1,5 +1,5 @@
+use super::error::HostRuntimeResult;
 use super::storage;
-use nostr_mcp_core::error::CoreError;
 use nostr_mcp_types::settings::{FollowEntry, ProfileMetadata};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    pub async fn load_or_init(path: PathBuf, pass: Arc<Vec<u8>>) -> Result<Self, CoreError> {
+    pub async fn load_or_init(path: PathBuf, pass: Arc<Vec<u8>>) -> HostRuntimeResult<Self> {
         let data = if path.exists() {
             storage::decrypt_from_file::<SettingsFile>(&path, &pass)?
         } else {
@@ -44,7 +44,7 @@ impl SettingsStore {
         })
     }
 
-    pub async fn persist(&self) -> Result<(), CoreError> {
+    pub async fn persist(&self) -> HostRuntimeResult<()> {
         let data = { self.inner.read().await.clone() };
         storage::encrypt_to_file(&self.path, &self.pass, &data)
     }
@@ -58,7 +58,7 @@ impl SettingsStore {
         &self,
         pubkey_hex: String,
         settings: KeySettings,
-    ) -> Result<(), CoreError> {
+    ) -> HostRuntimeResult<()> {
         {
             let mut data = self.inner.write().await;
             data.settings.insert(pubkey_hex, settings);

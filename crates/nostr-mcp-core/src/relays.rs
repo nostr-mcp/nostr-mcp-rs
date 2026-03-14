@@ -30,19 +30,19 @@ pub async fn set_relays(client: &Client, args: RelaysSetArgs) -> Result<(), Core
                 client
                     .add_read_relay(&url)
                     .await
-                    .map_err(|e| CoreError::Nostr(format!("add relay: {e}")))?;
+                    .map_err(|e| CoreError::operation(format!("add relay: {e}")))?;
             }
             RelayMode::Write => {
                 client
                     .add_write_relay(&url)
                     .await
-                    .map_err(|e| CoreError::Nostr(format!("add relay: {e}")))?;
+                    .map_err(|e| CoreError::operation(format!("add relay: {e}")))?;
             }
             RelayMode::Both => {
                 client
                     .add_relay(&url)
                     .await
-                    .map_err(|e| CoreError::Nostr(format!("add relay: {e}")))?;
+                    .map_err(|e| CoreError::operation(format!("add relay: {e}")))?;
             }
         }
     }
@@ -58,7 +58,7 @@ pub async fn connect_relays(client: &Client, args: RelaysConnectArgs) -> Result<
             client
                 .connect_relay(&url)
                 .await
-                .map_err(|e| CoreError::Nostr(format!("connect relay: {e}")))?;
+                .map_err(|e| CoreError::operation(format!("connect relay: {e}")))?;
         }
     } else {
         client.connect().await;
@@ -77,12 +77,12 @@ pub async fn disconnect_relays(
                 client
                     .force_remove_relay(&url)
                     .await
-                    .map_err(|e| CoreError::Nostr(format!("remove relay: {e}")))?;
+                    .map_err(|e| CoreError::operation(format!("remove relay: {e}")))?;
             } else {
                 client
                     .remove_relay(&url)
                     .await
-                    .map_err(|e| CoreError::Nostr(format!("remove relay: {e}")))?;
+                    .map_err(|e| CoreError::operation(format!("remove relay: {e}")))?;
             }
         }
     } else if force {

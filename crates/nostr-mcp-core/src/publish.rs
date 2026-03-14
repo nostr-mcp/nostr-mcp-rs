@@ -15,21 +15,21 @@ pub async fn publish_event_builder(
         client
             .send_event_builder_to(urls, builder)
             .await
-            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+            .map_err(|e| CoreError::operation(format!("send event: {e}")))?
     } else {
         client
             .send_event_builder(builder)
             .await
-            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+            .map_err(|e| CoreError::operation(format!("send event: {e}")))?
     };
 
     let pubkey = client
         .signer()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer: {e}")))?
         .get_public_key()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer pubkey: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?
         .to_hex();
 
     let id = out.id().to_string();
@@ -57,12 +57,12 @@ pub async fn publish_signed_event(
         client
             .send_event_to(urls, &event)
             .await
-            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+            .map_err(|e| CoreError::operation(format!("send event: {e}")))?
     } else {
         client
             .send_event(&event)
             .await
-            .map_err(|e| CoreError::Nostr(format!("send event: {e}")))?
+            .map_err(|e| CoreError::operation(format!("send event: {e}")))?
     };
 
     let id = out.id().to_string();
@@ -148,7 +148,7 @@ where
     let signer_pubkey = signer
         .get_public_key()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer pubkey: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?;
 
     if unsigned.pubkey != signer_pubkey {
         return Err(CoreError::invalid_input(
@@ -159,7 +159,7 @@ where
     let event = unsigned
         .sign(signer)
         .await
-        .map_err(|e| CoreError::Nostr(format!("sign event: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("sign event: {e}")))?;
 
     Ok(SignEventResult {
         event_id: event.id.to_string(),
@@ -181,14 +181,14 @@ fn thread_tags(args: &PostThreadArgs) -> Result<Vec<Tag>, CoreError> {
 
     tags.push(
         Tag::parse(&["subject".to_string(), args.subject.clone()])
-            .map_err(|e| CoreError::Nostr(format!("subject tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("subject tag: {e}")))?,
     );
 
     if let Some(hashtags) = &args.hashtags {
         for hashtag in hashtags {
             tags.push(
                 Tag::parse(&["t".to_string(), hashtag.clone()])
-                    .map_err(|e| CoreError::Nostr(format!("hashtag tag: {e}")))?,
+                    .map_err(|e| CoreError::operation(format!("hashtag tag: {e}")))?,
             );
         }
     }
@@ -326,7 +326,7 @@ pub async fn post_anonymous_note(
 
     let event = builder
         .sign_with_keys(&keys)
-        .map_err(|e| CoreError::Nostr(format!("sign event: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("sign event: {e}")))?;
 
     publish_signed_event(
         client,
@@ -396,7 +396,7 @@ fn long_form_tags(args: &PostLongFormArgs) -> Result<Vec<Tag>, CoreError> {
 
 fn tag_pair(name: &str, value: String, label: &str) -> Result<Tag, CoreError> {
     Tag::parse(&[name.to_string(), value])
-        .map_err(|e| CoreError::Nostr(format!("{label} tag: {e}")))
+        .map_err(|e| CoreError::operation(format!("{label} tag: {e}")))
 }
 
 fn ensure_tag_value(label: &str, value: &str) -> Result<String, CoreError> {
@@ -414,7 +414,7 @@ fn group_chat_tags(args: &PostGroupChatArgs) -> Result<Vec<Tag>, CoreError> {
 
     tags.push(
         Tag::parse(&["h".to_string(), args.group_id.clone()])
-            .map_err(|e| CoreError::Nostr(format!("group tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("group tag: {e}")))?,
     );
 
     if let Some(ref reply_id) = args.reply_to_id {
@@ -431,7 +431,7 @@ fn group_chat_tags(args: &PostGroupChatArgs) -> Result<Vec<Tag>, CoreError> {
                 relay.to_string(),
                 pubkey.to_string(),
             ])
-            .map_err(|e| CoreError::Nostr(format!("reply tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("reply tag: {e}")))?,
         );
     }
 

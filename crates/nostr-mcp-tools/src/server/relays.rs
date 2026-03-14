@@ -1,4 +1,4 @@
-use super::{NostrMcpServer, core_error};
+use super::{NostrMcpServer, core_error, host_runtime_error};
 use crate::host_runtime::settings::{KeySettings, SettingsStore};
 use nostr_mcp_core::relay_info::fetch_relay_info;
 use nostr_mcp_core::relays::{
@@ -39,7 +39,7 @@ impl NostrMcpServer {
         settings_store
             .save_settings(pubkey_hex, settings)
             .await
-            .map_err(core_error)
+            .map_err(host_runtime_error)
     }
 
     #[tool(

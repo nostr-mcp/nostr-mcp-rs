@@ -16,16 +16,16 @@ pub async fn fetch_relay_info(args: RelayInfoArgs) -> Result<RelayInfoResult, Co
         .timeout(Duration::from_secs(args.timeout()))
         .send()
         .await
-        .map_err(|e| CoreError::Nostr(format!("relay info request: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("relay info request: {e}")))?;
 
     let status = response.status();
     let body = response
         .text()
         .await
-        .map_err(|e| CoreError::Nostr(format!("relay info body: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("relay info body: {e}")))?;
 
     if !status.is_success() {
-        return Err(CoreError::Nostr(format!(
+        return Err(CoreError::operation(format!(
             "relay info status {}: {}",
             status.as_u16(),
             body

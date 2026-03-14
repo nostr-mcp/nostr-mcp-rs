@@ -53,7 +53,7 @@ fn parse_version(value: Option<u8>) -> Result<nip44::Version, CoreError> {
 fn payload_version(payload: &str) -> Result<u8, CoreError> {
     let bytes = general_purpose::STANDARD
         .decode(payload.as_bytes())
-        .map_err(|e| CoreError::Base64(format!("nip44 payload: {e}")))?;
+        .map_err(|e| CoreError::invalid_input(format!("invalid nip44 payload: {e}")))?;
     let version = bytes
         .first()
         .ok_or_else(|| CoreError::invalid_input("nip44 payload missing version"))?;

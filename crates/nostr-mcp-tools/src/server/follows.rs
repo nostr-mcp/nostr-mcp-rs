@@ -1,4 +1,4 @@
-use super::{NostrMcpServer, core_error, invalid_params};
+use super::{NostrMcpServer, core_error, host_runtime_error, invalid_params};
 use crate::host_runtime::settings::{KeySettings, SettingsStore};
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::follows_service::FollowsService;
@@ -40,7 +40,7 @@ impl NostrMcpServer {
         settings_store
             .save_settings(pubkey_hex, settings)
             .await
-            .map_err(core_error)
+            .map_err(host_runtime_error)
     }
 
     fn unpublished_follow_result() -> PublishFollowsResult {

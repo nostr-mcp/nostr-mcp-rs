@@ -12,7 +12,7 @@ pub async fn list_events(
     let events = client
         .fetch_events(filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::Nostr(format!("fetch events: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch events: {e}")))?;
     Ok(events.into_iter().collect())
 }
 
@@ -26,7 +26,7 @@ pub async fn query_events(client: &Client, args: QueryEventsArgs) -> Result<Vec<
         let events = client
             .fetch_events(filter, timeout)
             .await
-            .map_err(|e| CoreError::Nostr(format!("fetch events: {e}")))?;
+            .map_err(|e| CoreError::operation(format!("fetch events: {e}")))?;
         for event in events.into_iter() {
             if seen.insert(event.id) {
                 out.push(event);

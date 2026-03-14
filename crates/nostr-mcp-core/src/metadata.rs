@@ -70,15 +70,15 @@ pub async fn publish_metadata(
     let output = client
         .send_event_builder(builder)
         .await
-        .map_err(|e| CoreError::Nostr(format!("publish metadata: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("publish metadata: {e}")))?;
 
     let pubkey = client
         .signer()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer: {e}")))?
         .get_public_key()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer pubkey: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?
         .to_hex();
 
     let event_id = output.id().to_string();
@@ -116,11 +116,11 @@ pub async fn fetch_metadata_with_timeout(
     let events = client
         .fetch_events(filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::Nostr(format!("fetch metadata: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch metadata: {e}")))?;
 
     if let Some(event) = events.first() {
         let metadata = Metadata::from_json(&event.content)
-            .map_err(|e| CoreError::Nostr(format!("parse metadata: {e}")))?;
+            .map_err(|e| CoreError::operation(format!("parse metadata: {e}")))?;
         Ok(Some(metadata))
     } else {
         Ok(None)

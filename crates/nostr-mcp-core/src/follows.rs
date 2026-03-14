@@ -16,7 +16,7 @@ fn follows_to_tags(follows: &[FollowEntry]) -> Result<Vec<Tag>, CoreError> {
             tag_values.push(petname.clone());
         }
         let tag = Tag::parse(&tag_values)
-            .map_err(|e| CoreError::Nostr(format!("invalid follow tag: {e}")))?;
+            .map_err(|e| CoreError::operation(format!("invalid follow tag: {e}")))?;
         tags.push(tag);
     }
     Ok(tags)
@@ -56,7 +56,7 @@ pub async fn fetch_follows(
     let events = client
         .fetch_events(filter, std::time::Duration::from_secs(10))
         .await
-        .map_err(|e| CoreError::Nostr(format!("fetch follows: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch follows: {e}")))?;
 
     if let Some(event) = events.into_iter().next() {
         Ok(tags_to_follows(event.tags.iter()))
@@ -75,14 +75,14 @@ pub async fn publish_follows(
     let out = client
         .send_event_builder(builder)
         .await
-        .map_err(|e| CoreError::Nostr(format!("publish follows: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("publish follows: {e}")))?;
     let signer_pubkey = client
         .signer()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer: {e}")))?
         .get_public_key()
         .await
-        .map_err(|e| CoreError::Nostr(format!("get signer pubkey: {e}")))?
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?
         .to_hex();
 
     let event_id = out.id().to_string();

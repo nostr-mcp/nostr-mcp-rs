@@ -1,8 +1,8 @@
+use super::error::{HostRuntimeError, HostRuntimeResult};
 use super::fs::ensure_parent_dir;
 use aes_gcm::{Aes256Gcm, Nonce, aead::Aead, aead::KeyInit};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use nostr_mcp_core::error::CoreError;
 use rand::RngCore;
 use std::fs;
 use std::io::Write;
@@ -14,12 +14,12 @@ const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
 
-fn derive_key(pass: &[u8], salt: &[u8]) -> Result<[u8; KEY_LEN], CoreError> {
+fn derive_key(pass: &[u8], salt: &[u8]) -> HostRuntimeResult<[u8; KEY_LEN]> {
     use argon2::Argon2;
     let mut key = [0u8; KEY_LEN];
     Argon2::default()
         .hash_password_into(pass, salt, &mut key)
-        .map_err(|e| CoreError::Crypto(format!("kdf: {e}")))?;
+        .map_err(|e| HostRuntimeError::crypto(format!("kdf: {e}")))?;
     Ok(key)
 }
 
@@ -27,10 +27,10 @@ pub fn encrypt_to_file<T: serde::Serialize>(
     path: &Path,
     pass: &[u8],
     value: &T,
-) -> Result<(), CoreError> {
+) -> HostRuntimeResult<()> {
     ensure_parent_dir(path)?;
-    let json =
-        serde_json::to_vec(value).map_err(|e| CoreError::SerdeJson(format!("serialize: {e}")))?;
+    let json = serde_json::to_vec(value)
+        .map_err(|e| HostRuntimeError::serialization(format!("serialize: {e}")))?;
 
     let mut salt = [0u8; SALT_LEN];
     rand::thread_rng().fill_bytes(&mut salt);
@@ -43,7 +43,7 @@ pub fn encrypt_to_file<T: serde::Serialize>(
     let nonce = Nonce::from(nonce_bytes);
     let ct = cipher
         .encrypt(&nonce, json.as_slice())
-        .map_err(|e| CoreError::Crypto(format!("encrypt: {e}")))?;
+        .map_err(|e| HostRuntimeError::crypto(format!("encrypt: {e}")))?;
 
     let mut out = Vec::with_capacity(4 + 1 + SALT_LEN + NONCE_LEN + ct.len());
     out.extend_from_slice(MAGIC);
@@ -54,9 +54,9 @@ pub fn encrypt_to_file<T: serde::Serialize>(
 
     let b64 = B64.encode(out);
     let mut f = fs::File::create(path)
-        .map_err(|e| CoreError::Io(format!("create {}: {e}", path.display())))?;
+        .map_err(|e| HostRuntimeError::io(format!("create {}: {e}", path.display())))?;
     f.write_all(b64.as_bytes())
-        .map_err(|e| CoreError::Io(format!("write {}: {e}", path.display())))?;
+        .map_err(|e| HostRuntimeError::io(format!("write {}: {e}", path.display())))?;
     let _ = f.flush();
 
     let mut z = [0u8; KEY_LEN];
@@ -68,17 +68,17 @@ pub fn encrypt_to_file<T: serde::Serialize>(
 pub fn decrypt_from_file<T: serde::de::DeserializeOwned>(
     path: &Path,
     pass: &[u8],
-) -> Result<T, CoreError> {
+) -> HostRuntimeResult<T> {
     let b64 = fs::read_to_string(path)
-        .map_err(|e| CoreError::Io(format!("read {}: {e}", path.display())))?;
+        .map_err(|e| HostRuntimeError::io(format!("read {}: {e}", path.display())))?;
     let data = B64
         .decode(b64.as_bytes())
-        .map_err(|e| CoreError::Base64(format!("base64 decode: {e}")))?;
+        .map_err(|e| HostRuntimeError::encoding(format!("base64 decode: {e}")))?;
     if data.len() < 4 + 1 + SALT_LEN + NONCE_LEN {
-        return Err(CoreError::invalid_input("file too short"));
+        return Err(HostRuntimeError::invalid_input("file too short"));
     }
     if &data[0..4] != MAGIC {
-        return Err(CoreError::invalid_input("bad magic"));
+        return Err(HostRuntimeError::invalid_input("bad magic"));
     }
 
     let salt = &data[5..5 + SALT_LEN];
@@ -94,9 +94,9 @@ pub fn decrypt_from_file<T: serde::de::DeserializeOwned>(
 
     let pt = cipher
         .decrypt(&nonce, ct.as_ref())
-        .map_err(|e| CoreError::Crypto(format!("decrypt: {e}")))?;
+        .map_err(|e| HostRuntimeError::crypto(format!("decrypt: {e}")))?;
     let val = serde_json::from_slice::<T>(&pt)
-        .map_err(|e| CoreError::SerdeJson(format!("parse json: {e}")))?;
+        .map_err(|e| HostRuntimeError::serialization(format!("parse json: {e}")))?;
 
     let mut z = [0u8; KEY_LEN];
     z.copy_from_slice(&key);

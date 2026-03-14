@@ -171,7 +171,7 @@ fn validate_non_empty_field(field: &str, value: &str) -> Result<String, CoreErro
 fn push_group_id_tag(tags: &mut Vec<Tag>, group_id: &str) -> Result<(), CoreError> {
     tags.push(
         Tag::parse(&["h".to_string(), group_id.to_string()])
-            .map_err(|e| CoreError::Nostr(format!("group tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("group tag: {e}")))?,
     );
     Ok(())
 }
@@ -180,7 +180,7 @@ fn push_previous_tags(tags: &mut Vec<Tag>, previous_refs: &[String]) -> Result<(
     for reference in previous_refs {
         tags.push(
             Tag::parse(&["previous".to_string(), reference.clone()])
-                .map_err(|e| CoreError::Nostr(format!("previous tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("previous tag: {e}")))?,
         );
     }
     Ok(())
@@ -200,7 +200,7 @@ fn put_user_tags(args: &PutUserArgs) -> Result<Vec<Tag>, CoreError> {
             p_tag.push(validate_non_empty_field("role", role)?);
         }
     }
-    tags.push(Tag::parse(&p_tag).map_err(|e| CoreError::Nostr(format!("p tag: {e}")))?);
+    tags.push(Tag::parse(&p_tag).map_err(|e| CoreError::operation(format!("p tag: {e}")))?);
 
     push_previous_tags(&mut tags, &previous_refs)?;
     Ok(tags)
@@ -215,7 +215,7 @@ fn remove_user_tags(args: &RemoveUserArgs) -> Result<Vec<Tag>, CoreError> {
     push_group_id_tag(&mut tags, &group_id)?;
     tags.push(
         Tag::parse(&["p".to_string(), pubkey.to_hex()])
-            .map_err(|e| CoreError::Nostr(format!("p tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("p tag: {e}")))?,
     );
 
     push_previous_tags(&mut tags, &previous_refs)?;
@@ -232,7 +232,7 @@ fn edit_group_metadata_tags(args: &EditGroupMetadataArgs) -> Result<Vec<Tag>, Co
     if let Some(name) = args.name.as_ref() {
         tags.push(
             Tag::parse(&["name".to_string(), validate_non_empty_field("name", name)?])
-                .map_err(|e| CoreError::Nostr(format!("name tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("name tag: {e}")))?,
         );
     }
 
@@ -242,7 +242,7 @@ fn edit_group_metadata_tags(args: &EditGroupMetadataArgs) -> Result<Vec<Tag>, Co
             .map_err(|e| CoreError::invalid_input(format!("invalid picture url: {e}")))?;
         tags.push(
             Tag::parse(&["picture".to_string(), picture])
-                .map_err(|e| CoreError::Nostr(format!("picture tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("picture tag: {e}")))?,
         );
     }
 
@@ -252,35 +252,35 @@ fn edit_group_metadata_tags(args: &EditGroupMetadataArgs) -> Result<Vec<Tag>, Co
                 "about".to_string(),
                 validate_non_empty_field("about", about)?,
             ])
-            .map_err(|e| CoreError::Nostr(format!("about tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("about tag: {e}")))?,
         );
     }
 
     if args.unrestricted.unwrap_or(false) {
         tags.push(
             Tag::parse(&["unrestricted".to_string()])
-                .map_err(|e| CoreError::Nostr(format!("unrestricted tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("unrestricted tag: {e}")))?,
         );
     }
 
     if args.open.unwrap_or(false) {
         tags.push(
             Tag::parse(&["open".to_string()])
-                .map_err(|e| CoreError::Nostr(format!("open tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("open tag: {e}")))?,
         );
     }
 
     if args.visible.unwrap_or(false) {
         tags.push(
             Tag::parse(&["visible".to_string()])
-                .map_err(|e| CoreError::Nostr(format!("visible tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("visible tag: {e}")))?,
         );
     }
 
     if args.public.unwrap_or(false) {
         tags.push(
             Tag::parse(&["public".to_string()])
-                .map_err(|e| CoreError::Nostr(format!("public tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("public tag: {e}")))?,
         );
     }
 
@@ -297,7 +297,7 @@ fn delete_event_tags(args: &DeleteEventArgs) -> Result<Vec<Tag>, CoreError> {
     push_group_id_tag(&mut tags, &group_id)?;
     tags.push(
         Tag::parse(&["e".to_string(), event_id.to_hex()])
-            .map_err(|e| CoreError::Nostr(format!("event tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("event tag: {e}")))?,
     );
 
     push_previous_tags(&mut tags, &previous_refs)?;
@@ -334,7 +334,7 @@ fn create_invite_tags(args: &CreateInviteArgs) -> Result<Vec<Tag>, CoreError> {
     if let Some(code) = args.code.as_ref() {
         tags.push(
             Tag::parse(&["code".to_string(), validate_non_empty_field("code", code)?])
-                .map_err(|e| CoreError::Nostr(format!("code tag: {e}")))?,
+                .map_err(|e| CoreError::operation(format!("code tag: {e}")))?,
         );
     }
 
@@ -354,7 +354,7 @@ fn join_group_tags(args: &JoinGroupArgs) -> Result<Vec<Tag>, CoreError> {
                 "code".to_string(),
                 validate_non_empty_field("invite_code", code)?,
             ])
-            .map_err(|e| CoreError::Nostr(format!("code tag: {e}")))?,
+            .map_err(|e| CoreError::operation(format!("code tag: {e}")))?,
         );
     }
 
