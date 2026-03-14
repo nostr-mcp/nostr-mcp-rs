@@ -1,0 +1,5765 @@
+{
+  "spec_version": "0.1.12",
+  "registry_version": "0.1.12",
+  "tools": [
+    {
+      "name": "nostr_keys_generate",
+      "status": "stable",
+      "summary": "Generate a new Nostr keypair.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "make_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "persist_secret": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "GenerateArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "public_key",
+          "created_at"
+        ],
+        "title": "KeyEntry",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_import",
+      "status": "stable",
+      "summary": "Import a secret key (nsec or npub).",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "key_material": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "make_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "persist_secret": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "key_material"
+        ],
+        "title": "ImportArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "public_key",
+          "created_at"
+        ],
+        "title": "KeyEntry",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_remove",
+      "status": "stable",
+      "summary": "Remove a key by label.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "RemoveArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "KeyRemovalResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_list",
+      "status": "stable",
+      "summary": "List stored keys (metadata only).",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "KeyEntry": {
+            "properties": {
+              "created_at": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "label": {
+                "type": "string"
+              },
+              "public_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "public_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "active": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/$defs/KeyEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys",
+          "count"
+        ],
+        "title": "KeysListResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_set_active",
+      "status": "stable",
+      "summary": "Set active key by label.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "SetActiveArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "public_key",
+          "created_at"
+        ],
+        "title": "KeyEntry",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_get_active",
+      "status": "stable",
+      "summary": "Get active key (metadata only).",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "KeyEntry": {
+            "properties": {
+              "created_at": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "label": {
+                "type": "string"
+              },
+              "public_key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "public_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/KeyEntry"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Nullable_KeyEntry"
+      }
+    },
+    {
+      "name": "nostr_keys_rename_label",
+      "status": "stable",
+      "summary": "Rename a key label.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "RenameLabelArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "public_key",
+          "created_at"
+        ],
+        "title": "KeyEntry",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_export",
+      "status": "stable",
+      "summary": "Export a key in bech32 or hex formats.",
+      "nip": [],
+      "input_schema": {
+        "$defs": {
+          "ExportFormat": {
+            "enum": [
+              "bech32",
+              "hex",
+              "both"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "format": {
+            "$ref": "#/$defs/ExportFormat",
+            "default": "bech32"
+          },
+          "include_private": {
+            "default": false,
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ExportArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "private_key_hex": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "private_key_nsec": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_key_hex": {
+            "type": "string"
+          },
+          "public_key_npub": {
+            "type": "string"
+          },
+          "warning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "public_key_npub",
+          "public_key_hex"
+        ],
+        "title": "ExportResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_verify",
+      "status": "stable",
+      "summary": "Verify key format and validity.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "VerifyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "KeyType": {
+            "enum": [
+              "npub",
+              "nsec",
+              "hex",
+              "invalid"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "type": "string"
+          },
+          "key_type": {
+            "$ref": "#/$defs/KeyType"
+          },
+          "public_key_hex": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_key_npub": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "input",
+          "key_type",
+          "valid"
+        ],
+        "title": "VerifyResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_keys_derive_public",
+      "status": "stable",
+      "summary": "Derive public key from a private key.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "private_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "private_key"
+        ],
+        "title": "DerivePublicArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "public_key_hex": {
+            "type": "string"
+          },
+          "public_key_npub": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_key_npub",
+          "public_key_hex"
+        ],
+        "title": "DerivePublicResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_config_dir_get",
+      "status": "stable",
+      "summary": "Get config directory path.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ConfigDirResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_config_dir_set",
+      "status": "stable",
+      "summary": "Set config directory path.",
+      "nip": [],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ConfigDirSetArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ConfigDirResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_relays_set",
+      "status": "stable",
+      "summary": "Set relays and connect.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "autoconnect": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "read_write": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "urls"
+        ],
+        "title": "RelaysSetArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "RelayStatusRow": {
+            "properties": {
+              "discovery": {
+                "type": "boolean"
+              },
+              "read": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "status",
+              "read",
+              "write",
+              "discovery"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "relays": {
+            "items": {
+              "$ref": "#/$defs/RelayStatusRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "relays"
+        ],
+        "title": "RelayListResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_relays_connect",
+      "status": "stable",
+      "summary": "Connect to configured relays.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "title": "RelaysConnectArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "RelayStatusRow": {
+            "properties": {
+              "discovery": {
+                "type": "boolean"
+              },
+              "read": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "status",
+              "read",
+              "write",
+              "discovery"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "relays": {
+            "items": {
+              "$ref": "#/$defs/RelayStatusRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "relays"
+        ],
+        "title": "RelayListResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_relays_disconnect",
+      "status": "stable",
+      "summary": "Disconnect or remove relays.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "force_remove": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "title": "RelaysDisconnectArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "RelayStatusRow": {
+            "properties": {
+              "discovery": {
+                "type": "boolean"
+              },
+              "read": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "status",
+              "read",
+              "write",
+              "discovery"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "relays": {
+            "items": {
+              "$ref": "#/$defs/RelayStatusRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "relays"
+        ],
+        "title": "RelayListResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_relays_status",
+      "status": "stable",
+      "summary": "List relay status and flags.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "RelayStatusRow": {
+            "properties": {
+              "discovery": {
+                "type": "boolean"
+              },
+              "read": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "status",
+              "read",
+              "write",
+              "discovery"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "relays": {
+            "items": {
+              "$ref": "#/$defs/RelayStatusRow"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "summary",
+          "relays"
+        ],
+        "title": "RelayStatusResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_relays_get_info",
+      "status": "stable",
+      "summary": "Fetch relay information document.",
+      "nip": [
+        "nip-11"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "relay_url": {
+            "type": "string"
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "relay_url"
+        ],
+        "title": "RelayInfoArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "document": true,
+          "http_url": {
+            "type": "string"
+          },
+          "relay_url": {
+            "type": "string"
+          },
+          "status": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "relay_url",
+          "http_url",
+          "status",
+          "document"
+        ],
+        "title": "RelayInfoResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip05_resolve",
+      "status": "stable",
+      "summary": "Resolve a NIP-05 identifier to a pubkey and relay hints.",
+      "nip": [
+        "nip-05"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "title": "Nip05ResolveArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "nip46_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pubkey_hex": {
+            "type": "string"
+          },
+          "pubkey_npub": {
+            "type": "string"
+          },
+          "relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier",
+          "url",
+          "pubkey_hex",
+          "pubkey_npub",
+          "relays",
+          "nip46_relays"
+        ],
+        "title": "Nip05ResolveResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip05_verify",
+      "status": "stable",
+      "summary": "Verify a NIP-05 identifier against a pubkey.",
+      "nip": [
+        "nip-05"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identifier",
+          "pubkey"
+        ],
+        "title": "Nip05VerifyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "pubkey_hex": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "identifier",
+          "url",
+          "pubkey_hex",
+          "valid"
+        ],
+        "title": "Nip05VerifyResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip44_encrypt",
+      "status": "stable",
+      "summary": "Encrypt plaintext with NIP-44.",
+      "nip": [
+        "nip-44"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "plaintext": {
+            "type": "string"
+          },
+          "private_key": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "version": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "private_key",
+          "public_key",
+          "plaintext"
+        ],
+        "title": "Nip44EncryptArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ciphertext": {
+            "type": "string"
+          },
+          "peer_public_key_hex": {
+            "type": "string"
+          },
+          "peer_public_key_npub": {
+            "type": "string"
+          },
+          "version": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ciphertext",
+          "version",
+          "peer_public_key_hex",
+          "peer_public_key_npub"
+        ],
+        "title": "Nip44EncryptResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip44_decrypt",
+      "status": "stable",
+      "summary": "Decrypt NIP-44 ciphertext.",
+      "nip": [
+        "nip-44"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ciphertext": {
+            "type": "string"
+          },
+          "private_key": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "private_key",
+          "public_key",
+          "ciphertext"
+        ],
+        "title": "Nip44DecryptArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "peer_public_key_hex": {
+            "type": "string"
+          },
+          "peer_public_key_npub": {
+            "type": "string"
+          },
+          "plaintext": {
+            "type": "string"
+          },
+          "version": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plaintext",
+          "version",
+          "peer_public_key_hex",
+          "peer_public_key_npub"
+        ],
+        "title": "Nip44DecryptResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_handlers_recommend",
+      "status": "stable",
+      "summary": "Publish a NIP-89 handler recommendation event.",
+      "nip": [
+        "nip-89"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip89HandlerRecommendation": {
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "platform": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relay": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "address"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handlers": {
+            "items": {
+              "$ref": "#/$defs/Nip89HandlerRecommendation"
+            },
+            "type": "array"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "supported_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "supported_kind",
+          "handlers"
+        ],
+        "title": "Nip89RecommendArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_handlers_register",
+      "status": "stable",
+      "summary": "Publish a NIP-89 handler information event.",
+      "nip": [
+        "nip-89"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip89HandlerLink": {
+            "properties": {
+              "entity": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "platform": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "platform",
+              "url"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "kinds": {
+            "items": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/$defs/Nip89HandlerLink"
+            },
+            "type": "array"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identifier",
+          "kinds",
+          "links"
+        ],
+        "title": "Nip89HandlerInfoArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_badges_define",
+      "status": "stable",
+      "summary": "Publish a NIP-58 badge definition event.",
+      "nip": [
+        "nip-58"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip58BadgeImage": {
+            "properties": {
+              "dimensions": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Nip58BadgeImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thumbs": {
+            "items": {
+              "$ref": "#/$defs/Nip58BadgeImage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "title": "Nip58BadgeDefinitionArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_badges_award",
+      "status": "stable",
+      "summary": "Publish a NIP-58 badge award event.",
+      "nip": [
+        "nip-58"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip58BadgeRecipient": {
+            "properties": {
+              "pubkey": {
+                "type": "string"
+              },
+              "relay": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "badge": {
+            "type": "string"
+          },
+          "badge_relay": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/$defs/Nip58BadgeRecipient"
+            },
+            "type": "array"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "badge",
+          "recipients"
+        ],
+        "title": "Nip58BadgeAwardArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_badges_set_profile",
+      "status": "stable",
+      "summary": "Publish a NIP-58 profile badges event.",
+      "nip": [
+        "nip-58"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip58BadgeDisplay": {
+            "properties": {
+              "award_event_id": {
+                "type": "string"
+              },
+              "award_relay": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "badge": {
+                "type": "string"
+              },
+              "badge_relay": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "badge",
+              "award_event_id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "badges": {
+            "items": {
+              "$ref": "#/$defs/Nip58BadgeDisplay"
+            },
+            "type": "array"
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "badges"
+        ],
+        "title": "Nip58ProfileBadgesArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_parse_emojis",
+      "status": "stable",
+      "summary": "Parse NIP-30 emoji tags and shortcode mentions.",
+      "nip": [
+        "nip-30"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tags": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "Nip30ParseArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "Nip30EmojiMention": {
+            "properties": {
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "raw": {
+                "type": "string"
+              },
+              "shortcode": {
+                "type": "string"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "raw",
+              "shortcode",
+              "valid"
+            ],
+            "type": "object"
+          },
+          "Nip30EmojiTag": {
+            "properties": {
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "shortcode": {
+                "type": "string"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "shortcode",
+              "valid"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind_supported": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mentions": {
+            "items": {
+              "$ref": "#/$defs/Nip30EmojiMention"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/$defs/Nip30EmojiTag"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tags",
+          "mentions"
+        ],
+        "title": "Nip30ParseResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_list",
+      "status": "stable",
+      "summary": "List events using presets or filters.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "author_npub": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "preset": {
+            "type": "string"
+          },
+          "since": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "until": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "preset"
+        ],
+        "title": "EventsListArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "EventItem": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "pubkey",
+              "created_at",
+              "content",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/EventItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "count"
+        ],
+        "title": "EventItemsResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_query",
+      "status": "stable",
+      "summary": "Query events with NIP-01 filters.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "filters": {
+            "items": true,
+            "type": "array"
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "filters"
+        ],
+        "title": "QueryEventsArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "EventItem": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "pubkey",
+              "created_at",
+              "content",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/EventItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "count"
+        ],
+        "title": "EventItemsResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_search",
+      "status": "stable",
+      "summary": "Search events using relay search.",
+      "nip": [
+        "nip-50"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "author_npub": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kinds": {
+            "items": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "since": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "until": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchEventsArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "EventItem": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "pubkey",
+              "created_at",
+              "content",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/EventItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "count"
+        ],
+        "title": "EventItemsResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_text",
+      "status": "stable",
+      "summary": "Post a kind 1 text note.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "PostTextArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_thread",
+      "status": "stable",
+      "summary": "Post a kind 11 thread event.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "subject"
+        ],
+        "title": "PostThreadArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_group_chat",
+      "status": "stable",
+      "summary": "Post a kind 9 group chat message.",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reply_to_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reply_to_pubkey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reply_to_relay": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "PostGroupChatArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_reaction",
+      "status": "stable",
+      "summary": "Post a kind 7 reaction.",
+      "nip": [
+        "nip-25"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "event_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "event_pubkey": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relay_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "event_pubkey"
+        ],
+        "title": "PostReactionArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_publish_signed",
+      "status": "stable",
+      "summary": "Publish a fully signed Nostr event.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_json": {
+            "type": "string"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "event_json"
+        ],
+        "title": "PublishSignedEventArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_reply",
+      "status": "stable",
+      "summary": "Post a reply/comment with NIP-10 or NIP-22.",
+      "nip": [
+        "nip-10",
+        "nip-22"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "mentioned_pubkeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relay_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reply_to_id": {
+            "type": "string"
+          },
+          "reply_to_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reply_to_pubkey": {
+            "type": "string"
+          },
+          "root_event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "root_event_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "root_event_pubkey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "reply_to_id",
+          "reply_to_pubkey",
+          "reply_to_kind"
+        ],
+        "title": "PostReplyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_comment",
+      "status": "stable",
+      "summary": "Post a kind 1111 comment.",
+      "nip": [
+        "nip-22"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "parent_event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_event_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parent_event_pubkey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relay_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "root_event_id": {
+            "type": "string"
+          },
+          "root_event_kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "root_event_pubkey": {
+            "type": "string"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "root_event_id",
+          "root_event_pubkey",
+          "root_event_kind"
+        ],
+        "title": "PostCommentArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_create_poll",
+      "status": "stable",
+      "summary": "Create a kind 1068 poll.",
+      "nip": [
+        "nip-88"
+      ],
+      "input_schema": {
+        "$defs": {
+          "PollOption": {
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "option_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "option_id",
+              "label"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ends_at": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "options": {
+            "items": {
+              "$ref": "#/$defs/PollOption"
+            },
+            "type": "array"
+          },
+          "poll_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "relay_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "question",
+          "options",
+          "relay_urls"
+        ],
+        "title": "CreatePollArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_vote_poll",
+      "status": "stable",
+      "summary": "Vote on a poll (kind 1018).",
+      "nip": [
+        "nip-88"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "option_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "poll_event_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "poll_event_id",
+          "option_ids"
+        ],
+        "title": "VotePollArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_get_poll_results",
+      "status": "stable",
+      "summary": "Fetch poll results.",
+      "nip": [
+        "nip-88"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "poll_event_id": {
+            "type": "string"
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "poll_event_id"
+        ],
+        "title": "GetPollResultsArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "PollResultOption": {
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "option_id": {
+                "type": "string"
+              },
+              "votes": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "option_id",
+              "label",
+              "votes"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ended": {
+            "type": "boolean"
+          },
+          "ends_at": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "options": {
+            "items": {
+              "$ref": "#/$defs/PollResultOption"
+            },
+            "type": "array"
+          },
+          "poll_id": {
+            "type": "string"
+          },
+          "poll_type": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "total_votes": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "poll_id",
+          "question",
+          "poll_type",
+          "total_votes",
+          "options",
+          "ended"
+        ],
+        "title": "PollResults",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_put_user",
+      "status": "stable",
+      "summary": "Add or update group user (kind 9000).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id",
+          "pubkey"
+        ],
+        "title": "PutUserArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_remove_user",
+      "status": "stable",
+      "summary": "Remove group user (kind 9001).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id",
+          "pubkey"
+        ],
+        "title": "RemoveUserArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_edit_metadata",
+      "status": "stable",
+      "summary": "Edit group metadata (kind 9002).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "about": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "picture": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "public": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "unrestricted": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "visible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "EditGroupMetadataArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_delete_event",
+      "status": "stable",
+      "summary": "Delete group event (kind 9005).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id",
+          "event_id"
+        ],
+        "title": "DeleteEventArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_create_group",
+      "status": "stable",
+      "summary": "Create group (kind 9007).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "CreateGroupArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_delete_group",
+      "status": "stable",
+      "summary": "Delete group (kind 9008).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "DeleteGroupArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_create_invite",
+      "status": "stable",
+      "summary": "Create group invite (kind 9009).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "previous_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "CreateInviteArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_join",
+      "status": "stable",
+      "summary": "Request to join group (kind 9021).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "invite_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "JoinGroupArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_groups_leave",
+      "status": "stable",
+      "summary": "Request to leave group (kind 9022).",
+      "nip": [
+        "nip-29"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "group_id"
+        ],
+        "title": "LeaveGroupArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_metadata_set",
+      "status": "stable",
+      "summary": "Set kind 0 profile metadata.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "about": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "banner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lud06": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lud16": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nip05": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "picture": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publish": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "SetMetadataArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed_relays": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "pubkey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "saved": {
+            "type": "boolean"
+          },
+          "success_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "saved",
+          "published",
+          "success_relays",
+          "failed_relays"
+        ],
+        "title": "MetadataResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_metadata_get",
+      "status": "stable",
+      "summary": "Get local profile metadata.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "ProfileMetadata": {
+            "properties": {
+              "about": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "banner": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "display_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "lud06": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "lud16": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "nip05": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "picture": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "website": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ProfileMetadata"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "StoredMetadataResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_metadata_fetch",
+      "status": "stable",
+      "summary": "Fetch profile metadata from relays.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "FetchMetadataArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "metadata": true,
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "FetchedMetadataResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_follows_set",
+      "status": "stable",
+      "summary": "Set follow list (kind 3).",
+      "nip": [
+        "nip-02"
+      ],
+      "input_schema": {
+        "$defs": {
+          "FollowEntry": {
+            "properties": {
+              "petname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "relay_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "follows": {
+            "items": {
+              "$ref": "#/$defs/FollowEntry"
+            },
+            "type": "array"
+          },
+          "publish": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "follows"
+        ],
+        "title": "SetFollowsArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed_relays": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "pubkey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "saved": {
+            "type": "boolean"
+          },
+          "success_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "saved",
+          "published",
+          "success_relays",
+          "failed_relays"
+        ],
+        "title": "PublishFollowsResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_follows_get",
+      "status": "stable",
+      "summary": "Get local follow list.",
+      "nip": [
+        "nip-02"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "FollowEntry": {
+            "properties": {
+              "petname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "relay_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "follows": {
+            "items": {
+              "$ref": "#/$defs/FollowEntry"
+            },
+            "type": "array"
+          },
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pubkey",
+          "follows",
+          "count"
+        ],
+        "title": "FollowsLookupResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_follows_fetch",
+      "status": "stable",
+      "summary": "Fetch follow list from relays.",
+      "nip": [
+        "nip-02"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "EmptyArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "FollowEntry": {
+            "properties": {
+              "petname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "relay_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "follows": {
+            "items": {
+              "$ref": "#/$defs/FollowEntry"
+            },
+            "type": "array"
+          },
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pubkey",
+          "follows",
+          "count"
+        ],
+        "title": "FollowsLookupResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_follows_add",
+      "status": "stable",
+      "summary": "Add follow and publish.",
+      "nip": [
+        "nip-02"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "petname": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "publish": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "relay_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "AddFollowArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "FollowEntry": {
+            "properties": {
+              "petname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "relay_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          },
+          "PublishFollowsResult": {
+            "properties": {
+              "event_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "failed_relays": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "pubkey": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "published": {
+                "type": "boolean"
+              },
+              "saved": {
+                "type": "boolean"
+              },
+              "success_relays": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "saved",
+              "published",
+              "success_relays",
+              "failed_relays"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "follows": {
+            "items": {
+              "$ref": "#/$defs/FollowEntry"
+            },
+            "type": "array"
+          },
+          "result": {
+            "$ref": "#/$defs/PublishFollowsResult"
+          }
+        },
+        "required": [
+          "follows",
+          "count",
+          "result"
+        ],
+        "title": "FollowsMutationResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_follows_remove",
+      "status": "stable",
+      "summary": "Remove follow and publish.",
+      "nip": [
+        "nip-02"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pubkey": {
+            "type": "string"
+          },
+          "publish": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "RemoveFollowArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "FollowEntry": {
+            "properties": {
+              "petname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "relay_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pubkey"
+            ],
+            "type": "object"
+          },
+          "PublishFollowsResult": {
+            "properties": {
+              "event_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "failed_relays": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "pubkey": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "published": {
+                "type": "boolean"
+              },
+              "saved": {
+                "type": "boolean"
+              },
+              "success_relays": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "saved",
+              "published",
+              "success_relays",
+              "failed_relays"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "follows": {
+            "items": {
+              "$ref": "#/$defs/FollowEntry"
+            },
+            "type": "array"
+          },
+          "result": {
+            "$ref": "#/$defs/PublishFollowsResult"
+          }
+        },
+        "required": [
+          "follows",
+          "count",
+          "result"
+        ],
+        "title": "FollowsMutationResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip19_convert",
+      "status": "planned",
+      "summary": "Convert between NIP-19 encodings.",
+      "nip": [
+        "nip-19"
+      ],
+      "input_schema": {
+        "$defs": {
+          "Nip19EncodeTarget": {
+            "enum": [
+              "npub",
+              "nsec",
+              "note",
+              "nprofile",
+              "nevent",
+              "naddr"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "allow_secret": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "type": "string"
+          },
+          "kind": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "target": {
+            "$ref": "#/$defs/Nip19EncodeTarget"
+          }
+        },
+        "required": [
+          "target",
+          "input"
+        ],
+        "title": "Nip19EncodeArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "Nip19EncodeTarget": {
+            "enum": [
+              "npub",
+              "nsec",
+              "note",
+              "nprofile",
+              "nevent",
+              "naddr"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "encoded": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/$defs/Nip19EncodeTarget"
+          }
+        },
+        "required": [
+          "input",
+          "target",
+          "encoded"
+        ],
+        "title": "Nip19EncodeResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_nip19_analyze",
+      "status": "planned",
+      "summary": "Analyze NIP-19 entity.",
+      "nip": [
+        "nip-19"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "allow_secret": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "input": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "Nip19DecodeArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "Nip19DecodedData": {
+            "properties": {
+              "author_hex": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_id_hex": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "identifier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "is_secret": {
+                "type": "boolean"
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "pubkey_hex": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relays": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "is_secret"
+            ],
+            "type": "object"
+          },
+          "Nip19EntityType": {
+            "enum": [
+              "npub",
+              "nsec",
+              "note",
+              "nprofile",
+              "nevent",
+              "naddr",
+              "hex"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/Nip19DecodedData"
+          },
+          "input": {
+            "type": "string"
+          },
+          "input_type": {
+            "$ref": "#/$defs/Nip19EntityType"
+          }
+        },
+        "required": [
+          "input",
+          "input_type",
+          "data"
+        ],
+        "title": "Nip19DecodeResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_long_form",
+      "status": "stable",
+      "summary": "Post a kind 30023 long-form note.",
+      "nip": [
+        "nip-23"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "identifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "published_at": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "PostLongFormArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_list_long_form",
+      "status": "stable",
+      "summary": "List kind 30023 long-form notes.",
+      "nip": [
+        "nip-23"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "author_npub": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "identifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "since": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "until": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "LongFormListArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "EventItem": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "created_at": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "pubkey",
+              "created_at",
+              "content",
+              "tags"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/EventItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "count"
+        ],
+        "title": "EventItemsResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_parse_refs",
+      "status": "stable",
+      "summary": "Parse nostr: references in text content.",
+      "nip": [
+        "nip-27"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "ParseReferencesArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$defs": {
+          "ReferenceType": {
+            "enum": [
+              "npub",
+              "nprofile",
+              "note",
+              "nevent",
+              "naddr",
+              "nsec",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "TextReference": {
+            "properties": {
+              "bech32": {
+                "type": "string"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "identifier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "pubkey": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "raw": {
+                "type": "string"
+              },
+              "reference_type": {
+                "$ref": "#/$defs/ReferenceType"
+              },
+              "relays": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "raw",
+              "bech32",
+              "reference_type"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "references": {
+            "items": {
+              "$ref": "#/$defs/TextReference"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "references"
+        ],
+        "title": "ParseReferencesResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_delete",
+      "status": "stable",
+      "summary": "Delete events or coordinates.",
+      "nip": [
+        "nip-09"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "coordinates": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "title": "DeleteEventsArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_zaps_get_received",
+      "status": "planned",
+      "summary": "List received zaps.",
+      "nip": [
+        "nip-57"
+      ],
+      "input_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_zaps_get_sent",
+      "status": "planned",
+      "summary": "List sent zaps.",
+      "nip": [
+        "nip-57"
+      ],
+      "input_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_zaps_get_all",
+      "status": "planned",
+      "summary": "List sent and received zaps.",
+      "nip": [
+        "nip-57"
+      ],
+      "input_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_zaps_prepare_anonymous",
+      "status": "planned",
+      "summary": "Prepare anonymous zap request.",
+      "nip": [
+        "nip-57"
+      ],
+      "input_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_zaps_validate_receipt",
+      "status": "planned",
+      "summary": "Validate a zap receipt.",
+      "nip": [
+        "nip-57"
+      ],
+      "input_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_profiles_get",
+      "status": "stable",
+      "summary": "Fetch profile metadata for a pubkey.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pubkey": {
+            "type": "string"
+          },
+          "timeout_secs": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "ProfileGetArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "metadata": true,
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "title": "ProfileGetResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_create_text",
+      "status": "stable",
+      "summary": "Create unsigned kind 1 note.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tags": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "CreateTextArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "unsigned_event_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "pubkey",
+          "unsigned_event_json"
+        ],
+        "title": "CreateTextResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_sign",
+      "status": "stable",
+      "summary": "Sign an unsigned Nostr event.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "unsigned_event_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unsigned_event_json"
+        ],
+        "title": "SignEventArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "event_json": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "pubkey",
+          "event_json"
+        ],
+        "title": "SignEventResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_post_anonymous",
+      "status": "stable",
+      "summary": "Post anonymous note with one-time key.",
+      "nip": [
+        "nip-01"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tags": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "PostAnonymousArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    },
+    {
+      "name": "nostr_events_repost",
+      "status": "stable",
+      "summary": "Repost a signed event.",
+      "nip": [
+        "nip-18"
+      ],
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "event_json": {
+            "type": "string"
+          },
+          "pow": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relay_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_relays": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "event_json"
+        ],
+        "title": "PostRepostArgs",
+        "type": "object"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "pubkey": {
+            "type": "string"
+          },
+          "success": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "success",
+          "failed",
+          "pubkey"
+        ],
+        "title": "SendResult",
+        "type": "object"
+      }
+    }
+  ]
+}

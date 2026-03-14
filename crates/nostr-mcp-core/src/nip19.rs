@@ -3,73 +3,10 @@ use nostr::nips::nip19::{Nip19, Nip19Coordinate, Nip19Event, Nip19Profile};
 use nostr::prelude::{
     Coordinate, EventId, FromBech32, Kind, PublicKey, RelayUrl, SecretKey, ToBech32,
 };
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip19DecodeArgs {
-    pub input: String,
-    pub allow_secret: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip19DecodeResult {
-    pub input: String,
-    pub input_type: Nip19EntityType,
-    pub data: Nip19DecodedData,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Nip19EntityType {
-    Npub,
-    Nsec,
-    Note,
-    Nprofile,
-    Nevent,
-    Naddr,
-    Hex,
-}
-
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum Nip19EncodeTarget {
-    Npub,
-    Nsec,
-    Note,
-    Nprofile,
-    Nevent,
-    Naddr,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct Nip19EncodeArgs {
-    pub target: Nip19EncodeTarget,
-    pub input: String,
-    pub relays: Option<Vec<String>>,
-    pub author: Option<String>,
-    pub kind: Option<u16>,
-    pub identifier: Option<String>,
-    pub allow_secret: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip19EncodeResult {
-    pub input: String,
-    pub target: Nip19EncodeTarget,
-    pub encoded: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip19DecodedData {
-    pub pubkey_hex: Option<String>,
-    pub event_id_hex: Option<String>,
-    pub relays: Option<Vec<String>>,
-    pub author_hex: Option<String>,
-    pub kind: Option<u16>,
-    pub identifier: Option<String>,
-    pub is_secret: bool,
-}
+use nostr_mcp_types::nip19::{
+    Nip19DecodeArgs, Nip19DecodeResult, Nip19DecodedData, Nip19EncodeArgs, Nip19EncodeResult,
+    Nip19EncodeTarget, Nip19EntityType,
+};
 
 pub fn decode_nip19(args: Nip19DecodeArgs) -> Result<Nip19DecodeResult, CoreError> {
     let input = args.input.trim().to_string();
@@ -341,12 +278,12 @@ fn looks_like_coordinate(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        decode_nip19, encode_nip19, Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget,
-        Nip19EntityType,
-    };
+    use super::{decode_nip19, encode_nip19};
     use nostr::nips::nip19::ToBech32;
     use nostr::prelude::{EventId, Keys};
+    use nostr_mcp_types::nip19::{
+        Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget, Nip19EntityType,
+    };
 
     #[test]
     fn decode_rejects_empty() {
