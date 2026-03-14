@@ -60,4 +60,25 @@ mod tests {
         assert!(HostRuntimeError::invalid_input("bad input").is_invalid_input());
         assert!(!HostRuntimeError::io("disk").is_invalid_input());
     }
+
+    #[test]
+    fn error_display_remains_stable() {
+        assert_eq!(
+            HostRuntimeError::invalid_input("bad input").to_string(),
+            "invalid input: bad input"
+        );
+        assert_eq!(HostRuntimeError::io("disk").to_string(), "io error: disk");
+        assert_eq!(
+            HostRuntimeError::crypto("cipher").to_string(),
+            "crypto error: cipher"
+        );
+        assert_eq!(
+            HostRuntimeError::encoding("bad base64").to_string(),
+            "encoding error: bad base64"
+        );
+        assert_eq!(
+            HostRuntimeError::serialization("bad json").to_string(),
+            "serialization error: bad json"
+        );
+    }
 }

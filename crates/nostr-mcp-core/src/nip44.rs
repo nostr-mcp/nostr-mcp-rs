@@ -98,6 +98,7 @@ mod tests {
     use super::{
         decrypt_nip44, encrypt_nip44, parse_public_key, parse_secret_key, payload_version,
     };
+    use crate::error::CoreError;
     use nostr::prelude::{Keys, SecretKey, ToBech32};
     use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
 
@@ -159,5 +160,12 @@ mod tests {
     fn parse_public_key_rejects_invalid() {
         let err = parse_public_key("not-a-pubkey").unwrap_err();
         assert!(err.to_string().contains("invalid public key format"));
+    }
+
+    #[test]
+    fn payload_version_rejects_invalid_base64_as_invalid_input() {
+        let err = payload_version("not-base64").unwrap_err();
+        assert!(matches!(err, CoreError::InvalidInput(_)));
+        assert!(err.to_string().contains("invalid nip44 payload"));
     }
 }

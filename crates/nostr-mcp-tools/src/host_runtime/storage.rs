@@ -106,7 +106,10 @@ pub fn decrypt_from_file<T: serde::de::DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use super::{decrypt_from_file, encrypt_to_file};
+    use super::{NONCE_LEN, SALT_LEN, decrypt_from_file, encrypt_to_file};
+    use crate::host_runtime::error::HostRuntimeError;
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as B64;
     use serde::{Deserialize, Serialize};
     use tempfile::tempdir;
 
@@ -129,5 +132,29 @@ mod tests {
         encrypt_to_file(&path, pass, &data).unwrap();
         let decoded: SampleData = decrypt_from_file(&path, pass).unwrap();
         assert_eq!(decoded, data);
+    }
+
+    #[test]
+    fn decrypt_rejects_short_file_as_invalid_input() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("short.enc");
+        std::fs::write(&path, B64.encode([1u8, 2, 3])).unwrap();
+
+        let err = decrypt_from_file::<SampleData>(&path, b"test-passphrase").unwrap_err();
+        assert!(matches!(err, HostRuntimeError::InvalidInput(_)));
+        assert_eq!(err.to_string(), "invalid input: file too short");
+    }
+
+    #[test]
+    fn decrypt_rejects_bad_magic_as_invalid_input() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("bad-magic.enc");
+        let mut bytes = vec![0u8; 4 + 1 + SALT_LEN + NONCE_LEN];
+        bytes[0..4].copy_from_slice(b"BAD!");
+        std::fs::write(&path, B64.encode(bytes)).unwrap();
+
+        let err = decrypt_from_file::<SampleData>(&path, b"test-passphrase").unwrap_err();
+        assert!(matches!(err, HostRuntimeError::InvalidInput(_)));
+        assert_eq!(err.to_string(), "invalid input: bad magic");
     }
 }

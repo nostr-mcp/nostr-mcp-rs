@@ -40,4 +40,20 @@ mod tests {
         assert!(!CoreError::crypto("encrypt failed").is_invalid_input());
         assert!(!CoreError::operation("send failed").is_invalid_input());
     }
+
+    #[test]
+    fn error_display_remains_stable() {
+        assert_eq!(
+            CoreError::invalid_input("bad input").to_string(),
+            "invalid input: bad input"
+        );
+        assert_eq!(
+            CoreError::crypto("encrypt failed").to_string(),
+            "crypto error: encrypt failed"
+        );
+        assert_eq!(
+            CoreError::operation("send failed").to_string(),
+            "operation error: send failed"
+        );
+    }
 }

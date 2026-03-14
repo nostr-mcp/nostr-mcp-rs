@@ -373,8 +373,10 @@ pub async fn start_stdio_server_with_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::{NostrMcpRuntime, NostrMcpServer};
+    use super::{NostrMcpRuntime, NostrMcpServer, core_error, host_runtime_error};
+    use crate::host_runtime::error::HostRuntimeError;
     use crate::runtime::default_runtime_signer_policy;
+    use nostr_mcp_core::CoreError;
     use nostr_mcp_policy::{
         CapabilityScope, RelayTargetScope, SignerBackend, SignerPolicy, default_signer_policy,
     };
@@ -386,6 +388,7 @@ mod tests {
     use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
     use nostr_mcp_types::metadata::SetMetadataArgs;
     use nostr_mcp_types::nip30::Nip30ParseArgs;
+    use nostr_mcp_types::nip44::Nip44DecryptArgs;
     use nostr_mcp_types::publish::{CreateTextArgs, PostTextArgs, SignEventArgs};
     use nostr_mcp_types::references::ParseReferencesArgs;
     use nostr_mcp_types::registry::{
@@ -915,6 +918,34 @@ mod tests {
         assert!(info.capabilities.tools.is_some());
     }
 
+    #[test]
+    fn core_error_maps_invalid_input_without_prefix() {
+        let err = core_error(CoreError::invalid_input("bad input"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert_eq!(err.message.as_ref(), "bad input");
+    }
+
+    #[test]
+    fn core_error_maps_operation_to_internal_error_with_prefix() {
+        let err = core_error(CoreError::operation("send failed"));
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(err.message.as_ref(), "operation error: send failed");
+    }
+
+    #[test]
+    fn host_runtime_error_maps_invalid_input_without_prefix() {
+        let err = host_runtime_error(HostRuntimeError::invalid_input("unknown key label"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert_eq!(err.message.as_ref(), "unknown key label");
+    }
+
+    #[test]
+    fn host_runtime_error_maps_runtime_failures_to_internal_error() {
+        let err = host_runtime_error(HostRuntimeError::io("disk failed"));
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(err.message.as_ref(), "io error: disk failed");
+    }
+
     #[tokio::test]
     async fn golden_keys_verify_valid_nsec() {
         let (_dir, server) = golden_server("keys-verify-valid-nsec");
@@ -937,6 +968,40 @@ mod tests {
             .await
             .unwrap();
         assert_tool_result_matches_golden("read_only", "keys_verify_invalid", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn host_runtime_invalid_input_surfaces_as_invalid_params() {
+        let (_dir, server) = golden_server("host-runtime-invalid-input");
+        let err = server
+            .nostr_keys_set_active(Parameters(SetActiveArgs {
+                label: "missing".to_string(),
+            }))
+            .await
+            .expect_err("missing key should surface invalid params");
+
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert_eq!(err.message.as_ref(), "unknown key label");
+    }
+
+    #[tokio::test]
+    async fn core_invalid_input_surfaces_as_invalid_params() {
+        let (_dir, server) = golden_server("core-invalid-input");
+        let err = server
+            .nostr_nip44_decrypt(Parameters(Nip44DecryptArgs {
+                private_key: FIXTURE_PRIMARY_NSEC.to_string(),
+                public_key: FIXTURE_SECONDARY_NPUB.to_string(),
+                ciphertext: "not-base64".to_string(),
+            }))
+            .await
+            .expect_err("invalid nip44 payload should surface invalid params");
+
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(
+            err.message.as_ref().contains("invalid nip44 payload"),
+            "unexpected error message: {}",
+            err.message
+        );
     }
 
     #[tokio::test]
