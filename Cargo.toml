@@ -5,16 +5,18 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
 license = "Unlicense"
-authors = ["Nostr MCP Developers"]
+authors = ["Tyson Lupul <tyson@radroots.org>"]
 readme = "README.md"
 repository = "https://github.com/nostr-mcp/nostr-mcp-rs"
 homepage = "https://github.com/nostr-mcp/nostr-mcp-rs"
 rust-version = "1.92.0"
 
 [workspace.dependencies]
+nostr-mcp-core = { version = "0.1.0-alpha.1", path = "crates/nostr-mcp-core" }
+nostr-mcp-tools = { version = "0.1.0-alpha.1", path = "crates/nostr-mcp-tools" }
 aes-gcm = "0.10"
 anyhow = "1"
 argon2 = { version = "0.5", features = ["std"] }

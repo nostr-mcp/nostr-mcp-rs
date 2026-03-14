@@ -8,6 +8,7 @@ authors.workspace = true
 readme.workspace = true
 repository.workspace = true
 homepage.workspace = true
+publish = false
 description = "Nostr MCP Rust SDK"
 keywords = ["nostr", "mcp", "rust"]
 

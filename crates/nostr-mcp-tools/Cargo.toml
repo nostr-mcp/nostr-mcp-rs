@@ -8,13 +8,14 @@ authors.workspace = true
 readme.workspace = true
 repository.workspace = true
 homepage.workspace = true
+publish = false
 description = "Nostr MCP tools server"
 keywords = ["nostr", "mcp", "rust"]
 
 [dependencies]
 anyhow = { workspace = true }
 dirs = { workspace = true }
-nostr-mcp-core = { path = "../nostr-mcp-core" }
+nostr-mcp-core = { workspace = true }
 nostr-sdk = { workspace = true }
 rmcp = { workspace = true, features = ["server", "macros", "transport-io", "schemars"] }
 schemars = { workspace = true }
