@@ -39,7 +39,7 @@ impl Nip46GetPublicKeyResponse {
         let result = response.result.ok_or_else(|| {
             Nip46Error::unexpected_response_value("get_public_key", "user public key", "<none>")
         })?;
-        let user_public_key = PublicKey::parse(&result)
+        let user_public_key = PublicKey::from_hex(&result)
             .map_err(|err| Nip46Error::invalid_public_key(err.to_string()))?;
 
         Ok(Self {

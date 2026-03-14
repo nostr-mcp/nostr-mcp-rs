@@ -36,7 +36,7 @@ impl Nip46ConnectRequest {
             ));
         }
 
-        let remote_signer_public_key = PublicKey::parse(&params[0])
+        let remote_signer_public_key = PublicKey::from_hex(&params[0])
             .map_err(|err| Nip46Error::invalid_public_key(err.to_string()))?;
         let secret = params
             .get(1)

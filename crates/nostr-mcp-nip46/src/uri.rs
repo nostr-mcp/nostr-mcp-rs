@@ -51,7 +51,7 @@ impl Nip46ConnectUri {
             Url::parse(value.as_ref()).map_err(|err| Nip46Error::invalid_url(err.to_string()))?;
         let scheme = url.scheme().to_owned();
         let key = url.host_str().ok_or(Nip46Error::MissingPublicKey)?;
-        let key = PublicKey::from_str(key)
+        let key = PublicKey::from_hex(key)
             .map_err(|err| Nip46Error::invalid_public_key(err.to_string()))?;
 
         let mut relays = Vec::new();
