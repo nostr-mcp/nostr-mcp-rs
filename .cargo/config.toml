@@ -1,0 +1,2 @@
+[alias]
+guard-registry-drift = "test -p nostr-mcp-tools server::tests::registry_surface_guard_blocks_drift -- --exact"

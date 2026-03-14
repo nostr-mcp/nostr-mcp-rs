@@ -370,6 +370,189 @@ mod tests {
             .collect()
     }
 
+    fn assert_registry_characterization(registry: &ToolRegistry) {
+        let names: BTreeSet<String> = registry
+            .tools
+            .iter()
+            .map(|tool| tool.name.clone())
+            .collect();
+        let planned: BTreeSet<String> = registry
+            .tools
+            .iter()
+            .filter(|tool| tool.status == ToolStatus::Planned)
+            .map(|tool| tool.name.clone())
+            .collect();
+        let stable_count = registry
+            .tools
+            .iter()
+            .filter(|tool| tool.status == ToolStatus::Stable)
+            .count();
+
+        assert_eq!(
+            names.len(),
+            registry.tools.len(),
+            "duplicate tool name in registry"
+        );
+        assert!(
+            registry
+                .tools
+                .iter()
+                .all(|tool| !tool.summary.trim().is_empty()),
+            "registry tool summary must not be empty"
+        );
+        assert_eq!(stable_count, CHARACTERIZED_STABLE_TOOL_COUNT);
+        assert_eq!(
+            characterized_live_registry_tool_names(registry).len(),
+            CHARACTERIZED_GENERIC_STABLE_TOOL_COUNT
+        );
+        assert_eq!(
+            planned,
+            CHARACTERIZED_PLANNED_TOOLS
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+    }
+
+    fn assert_live_router_matches_registry(server: &NostrMcpServer, registry: &ToolRegistry) {
+        assert_eq!(
+            live_tool_names(server),
+            characterized_live_registry_tool_names(registry)
+        );
+    }
+
+    fn assert_server_instructions_match_registry(server: &NostrMcpServer, registry: &ToolRegistry) {
+        assert_eq!(
+            advertised_tool_names(server),
+            characterized_live_registry_tool_names(registry)
+        );
+    }
+
+    fn assert_stable_registry_schemas(registry: &ToolRegistry) {
+        let stable_tools = characterized_live_registry_tools(registry);
+        let missing_input_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| tool.input_schema.is_empty())
+            .map(|tool| tool.name.clone())
+            .collect();
+        let missing_output_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| tool.output_schema.is_empty())
+            .map(|tool| tool.name.clone())
+            .collect();
+
+        assert!(
+            missing_input_schema.is_empty(),
+            "stable registry tools missing input schema: {missing_input_schema:?}"
+        );
+        assert!(
+            missing_output_schema.is_empty(),
+            "stable registry tools missing output schema: {missing_output_schema:?}"
+        );
+    }
+
+    fn assert_stable_live_route_metadata(server: &NostrMcpServer, registry: &ToolRegistry) {
+        let mut missing_description = Vec::new();
+        let mut missing_input_schema = Vec::new();
+
+        for tool_name in characterized_live_registry_tool_names(registry) {
+            let route = server
+                .tool_router
+                .map
+                .get(tool_name.as_str())
+                .expect("characterized tool route");
+            if route
+                .attr
+                .description
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            {
+                missing_description.push(tool_name.clone());
+            }
+            if route.attr.input_schema.is_empty() {
+                missing_input_schema.push(tool_name.clone());
+            }
+        }
+
+        assert!(
+            missing_description.is_empty(),
+            "stable live routes missing descriptions: {missing_description:?}"
+        );
+        assert!(
+            missing_input_schema.is_empty(),
+            "stable live routes missing input schema: {missing_input_schema:?}"
+        );
+    }
+
+    fn assert_stable_live_route_output_schema_posture(
+        server: &NostrMcpServer,
+        registry: &ToolRegistry,
+    ) {
+        let characterized_tools: Vec<_> = characterized_live_registry_tool_names(registry)
+            .into_iter()
+            .collect();
+        let missing_output_schema: Vec<_> = characterized_tools
+            .iter()
+            .filter_map(|tool_name| {
+                let route = server
+                    .tool_router
+                    .map
+                    .get(tool_name.as_str())
+                    .expect("characterized tool route");
+                route
+                    .attr
+                    .output_schema
+                    .as_ref()
+                    .is_none_or(|schema| schema.is_empty())
+                    .then(|| tool_name.clone())
+            })
+            .collect();
+
+        assert!(
+            missing_output_schema == characterized_tools,
+            "stable live route output schema posture changed: {missing_output_schema:?}"
+        );
+    }
+
+    fn assert_golden_read_only_tool_cohort(registry: &ToolRegistry) {
+        let live_tools = characterized_live_registry_tool_names(registry);
+        let golden_tools: BTreeSet<_> = GOLDEN_READ_ONLY_TOOLS
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+
+        assert_eq!(golden_tools.len(), GOLDEN_READ_ONLY_TOOL_COUNT);
+        assert!(
+            golden_tools.is_subset(&live_tools),
+            "golden read-only tool cohort drifted: {golden_tools:?}"
+        );
+    }
+
+    fn assert_golden_write_tool_cohort(registry: &ToolRegistry) {
+        let live_tools = characterized_live_registry_tool_names(registry);
+        let golden_tools: BTreeSet<_> =
+            GOLDEN_WRITE_TOOLS.into_iter().map(str::to_string).collect();
+
+        assert_eq!(golden_tools.len(), GOLDEN_WRITE_TOOL_COUNT);
+        assert!(
+            golden_tools.is_subset(&live_tools),
+            "golden write tool cohort drifted: {golden_tools:?}"
+        );
+    }
+
+    fn assert_registry_surface_guard() {
+        let server = NostrMcpServer::new();
+        let registry = load_tool_registry();
+        assert_registry_characterization(&registry);
+        assert_live_router_matches_registry(&server, &registry);
+        assert_server_instructions_match_registry(&server, &registry);
+        assert_stable_registry_schemas(&registry);
+        assert_stable_live_route_metadata(&server, &registry);
+        assert_stable_live_route_output_schema_posture(&server, &registry);
+        assert_golden_read_only_tool_cohort(&registry);
+        assert_golden_write_tool_cohort(&registry);
+    }
+
     fn golden_fixture_path(category: &str, name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/golden")
@@ -533,188 +716,58 @@ mod tests {
     #[test]
     fn tool_registry_matches_characterized_surface() {
         let registry = load_tool_registry();
-        let names: BTreeSet<String> = registry
-            .tools
-            .iter()
-            .map(|tool| tool.name.clone())
-            .collect();
-        let planned: BTreeSet<String> = registry
-            .tools
-            .iter()
-            .filter(|tool| tool.status == ToolStatus::Planned)
-            .map(|tool| tool.name.clone())
-            .collect();
-        let stable_count = registry
-            .tools
-            .iter()
-            .filter(|tool| tool.status == ToolStatus::Stable)
-            .count();
-
-        assert_eq!(
-            names.len(),
-            registry.tools.len(),
-            "duplicate tool name in registry"
-        );
-        assert!(
-            registry
-                .tools
-                .iter()
-                .all(|tool| !tool.summary.trim().is_empty()),
-            "registry tool summary must not be empty"
-        );
-        assert_eq!(stable_count, CHARACTERIZED_STABLE_TOOL_COUNT);
-        assert_eq!(
-            characterized_live_registry_tool_names(&registry).len(),
-            CHARACTERIZED_GENERIC_STABLE_TOOL_COUNT
-        );
-        assert_eq!(
-            planned,
-            CHARACTERIZED_PLANNED_TOOLS
-                .into_iter()
-                .map(str::to_string)
-                .collect()
-        );
+        assert_registry_characterization(&registry);
     }
 
     #[test]
     fn live_tool_router_matches_characterized_registry_surface() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        assert_eq!(
-            live_tool_names(&server),
-            characterized_live_registry_tool_names(&registry)
-        );
+        assert_live_router_matches_registry(&server, &registry);
     }
 
     #[test]
     fn server_instructions_match_characterized_registry_surface() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        assert_eq!(
-            advertised_tool_names(&server),
-            characterized_live_registry_tool_names(&registry)
-        );
+        assert_server_instructions_match_registry(&server, &registry);
     }
 
     #[test]
     fn stable_registry_tools_define_input_and_output_schemas() {
         let registry = load_tool_registry();
-        let stable_tools = characterized_live_registry_tools(&registry);
-        let missing_input_schema: Vec<_> = stable_tools
-            .iter()
-            .filter(|tool| tool.input_schema.is_empty())
-            .map(|tool| tool.name.clone())
-            .collect();
-        let missing_output_schema: Vec<_> = stable_tools
-            .iter()
-            .filter(|tool| tool.output_schema.is_empty())
-            .map(|tool| tool.name.clone())
-            .collect();
-
-        assert!(
-            missing_input_schema.is_empty(),
-            "stable registry tools missing input schema: {missing_input_schema:?}"
-        );
-        assert!(
-            missing_output_schema.is_empty(),
-            "stable registry tools missing output schema: {missing_output_schema:?}"
-        );
+        assert_stable_registry_schemas(&registry);
     }
 
     #[test]
     fn stable_live_tool_routes_define_descriptions_and_input_schemas() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        let mut missing_description = Vec::new();
-        let mut missing_input_schema = Vec::new();
-
-        for tool_name in characterized_live_registry_tool_names(&registry) {
-            let route = server
-                .tool_router
-                .map
-                .get(tool_name.as_str())
-                .expect("characterized tool route");
-            if route
-                .attr
-                .description
-                .as_deref()
-                .is_none_or(|value| value.trim().is_empty())
-            {
-                missing_description.push(tool_name.clone());
-            }
-            if route.attr.input_schema.is_empty() {
-                missing_input_schema.push(tool_name.clone());
-            }
-        }
-
-        assert!(
-            missing_description.is_empty(),
-            "stable live routes missing descriptions: {missing_description:?}"
-        );
-        assert!(
-            missing_input_schema.is_empty(),
-            "stable live routes missing input schema: {missing_input_schema:?}"
-        );
+        assert_stable_live_route_metadata(&server, &registry);
     }
 
     #[test]
     fn stable_live_tool_routes_do_not_yet_define_output_schemas() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        let characterized_tools: Vec<_> = characterized_live_registry_tool_names(&registry)
-            .into_iter()
-            .collect();
-        let missing_output_schema: Vec<_> = characterized_tools
-            .iter()
-            .filter_map(|tool_name| {
-                let route = server
-                    .tool_router
-                    .map
-                    .get(tool_name.as_str())
-                    .expect("characterized tool route");
-                route
-                    .attr
-                    .output_schema
-                    .as_ref()
-                    .is_none_or(|schema| schema.is_empty())
-                    .then(|| tool_name.clone())
-            })
-            .collect();
-
-        assert!(
-            missing_output_schema == characterized_tools,
-            "stable live route output schema posture changed: {missing_output_schema:?}"
-        );
+        assert_stable_live_route_output_schema_posture(&server, &registry);
     }
 
     #[test]
     fn golden_read_only_tool_cohort_is_characterized() {
         let registry = load_tool_registry();
-        let live_tools = characterized_live_registry_tool_names(&registry);
-        let golden_tools: BTreeSet<_> = GOLDEN_READ_ONLY_TOOLS
-            .into_iter()
-            .map(str::to_string)
-            .collect();
-
-        assert_eq!(golden_tools.len(), GOLDEN_READ_ONLY_TOOL_COUNT);
-        assert!(
-            golden_tools.is_subset(&live_tools),
-            "golden read-only tool cohort drifted: {golden_tools:?}"
-        );
+        assert_golden_read_only_tool_cohort(&registry);
     }
 
     #[test]
     fn golden_write_tool_cohort_is_characterized() {
         let registry = load_tool_registry();
-        let live_tools = characterized_live_registry_tool_names(&registry);
-        let golden_tools: BTreeSet<_> =
-            GOLDEN_WRITE_TOOLS.into_iter().map(str::to_string).collect();
+        assert_golden_write_tool_cohort(&registry);
+    }
 
-        assert_eq!(golden_tools.len(), GOLDEN_WRITE_TOOL_COUNT);
-        assert!(
-            golden_tools.is_subset(&live_tools),
-            "golden write tool cohort drifted: {golden_tools:?}"
-        );
+    #[test]
+    fn registry_surface_guard_blocks_drift() {
+        assert_registry_surface_guard();
     }
 
     #[test]
