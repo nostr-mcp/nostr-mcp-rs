@@ -797,6 +797,16 @@ mod tests {
         (dir, NostrMcpServer::with_runtime(runtime))
     }
 
+    fn production_server(name: &str) -> (tempfile::TempDir, NostrMcpServer) {
+        let dir = tempdir().unwrap();
+        let runtime = NostrMcpRuntime::new(
+            format!("production-{name}"),
+            format!("production-service-{name}"),
+            dir.path().to_path_buf(),
+        );
+        (dir, NostrMcpServer::with_runtime(runtime))
+    }
+
     fn server_with_policy(
         name: &str,
         config_root: PathBuf,
@@ -1041,7 +1051,7 @@ mod tests {
 
     #[tokio::test]
     async fn production_runtime_denies_local_key_generation() {
-        let server = NostrMcpServer::new();
+        let (_dir, server) = production_server("local-key-generation-deny");
         let err = server
             .nostr_keys_generate(Parameters(GenerateArgs {
                 label: FIXTURE_PRIMARY_LABEL.to_string(),
@@ -1057,7 +1067,7 @@ mod tests {
 
     #[tokio::test]
     async fn production_runtime_denies_local_secret_import() {
-        let server = NostrMcpServer::new();
+        let (_dir, server) = production_server("local-secret-import-deny");
         let err = server
             .nostr_keys_import(Parameters(ImportArgs {
                 label: FIXTURE_PRIMARY_LABEL.to_string(),
@@ -1074,7 +1084,7 @@ mod tests {
 
     #[tokio::test]
     async fn production_runtime_denies_private_key_export() {
-        let server = NostrMcpServer::new();
+        let (_dir, server) = production_server("private-key-export-deny");
         import_primary_watch_only_key(&server).await;
         let err = server
             .nostr_keys_export(Parameters(ExportArgs {
@@ -1091,7 +1101,7 @@ mod tests {
 
     #[tokio::test]
     async fn production_runtime_denies_private_key_derivation() {
-        let server = NostrMcpServer::new();
+        let (_dir, server) = production_server("private-key-derivation-deny");
         let err = server
             .nostr_keys_derive_public(Parameters(DerivePublicArgs {
                 private_key: FIXTURE_PRIMARY_NSEC.to_string(),
@@ -1105,7 +1115,7 @@ mod tests {
 
     #[tokio::test]
     async fn production_runtime_denies_nip44_raw_secret_tools() {
-        let server = NostrMcpServer::new();
+        let (_dir, server) = production_server("nip44-raw-secret-deny");
         let encrypt_err = server
             .nostr_nip44_encrypt(Parameters(Nip44EncryptArgs {
                 private_key: FIXTURE_PRIMARY_NSEC.to_string(),

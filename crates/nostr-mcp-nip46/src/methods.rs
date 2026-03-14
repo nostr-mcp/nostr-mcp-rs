@@ -179,6 +179,18 @@ mod tests {
     }
 
     #[test]
+    fn get_public_key_response_rejects_error_payload() {
+        let err =
+            Nip46GetPublicKeyResponse::from_response_message(Nip46ResponseMessage::with_error(
+                Nip46RequestId::new("3047714671").unwrap(),
+                "permission denied",
+            ))
+            .unwrap_err();
+
+        assert_eq!(err.to_string(), "response error: permission denied");
+    }
+
+    #[test]
     fn switch_relays_request_rejects_params() {
         let err =
             Nip46SwitchRelaysRequest::from_params(vec!["unexpected".to_string()]).unwrap_err();
@@ -224,5 +236,17 @@ mod tests {
                 "[\"wss://relay1.example.com\",\"wss://relay2.example.com\"]",
             )
         );
+    }
+
+    #[test]
+    fn switch_relays_response_rejects_error_payload() {
+        let err =
+            Nip46SwitchRelaysResponse::from_response_message(Nip46ResponseMessage::with_error(
+                Nip46RequestId::new("3047714674").unwrap(),
+                "relay update denied",
+            ))
+            .unwrap_err();
+
+        assert_eq!(err.to_string(), "response error: relay update denied");
     }
 }

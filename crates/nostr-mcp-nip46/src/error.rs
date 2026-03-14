@@ -28,6 +28,8 @@ pub enum Nip46Error {
     ExpectedRequestMessage,
     #[error("invalid message: expected response")]
     ExpectedResponseMessage,
+    #[error("invalid timeout seconds: expected a positive bounded timeout, received `{0}`")]
+    InvalidTimeoutSeconds(u64),
     #[error("invalid params for `{method}`: expected {expected}, received {received}")]
     InvalidParamsLength {
         method: String,
@@ -46,6 +48,10 @@ pub enum Nip46Error {
         expected: String,
         received: String,
     },
+    #[error("request timed out for `{method}` with id `{request_id}`")]
+    RequestTimedOut { method: String, request_id: String },
+    #[error("replayed response for `{method}` with id `{request_id}`")]
+    RequestReplayed { method: String, request_id: String },
     #[error("invalid connect flow: {0}")]
     InvalidConnectFlow(String),
 }
@@ -105,6 +111,10 @@ impl Nip46Error {
         }
     }
 
+    pub const fn invalid_timeout_seconds(received: u64) -> Self {
+        Self::InvalidTimeoutSeconds(received)
+    }
+
     pub fn response_error<S>(message: S) -> Self
     where
         S: Into<String>,
@@ -130,5 +140,25 @@ impl Nip46Error {
         S: Into<String>,
     {
         Self::InvalidConnectFlow(message.into())
+    }
+
+    pub fn request_timed_out(
+        method: crate::permission::Nip46Method,
+        request_id: crate::message::Nip46RequestId,
+    ) -> Self {
+        Self::RequestTimedOut {
+            method: method.to_string(),
+            request_id: request_id.to_string(),
+        }
+    }
+
+    pub fn request_replayed(
+        method: crate::permission::Nip46Method,
+        request_id: crate::message::Nip46RequestId,
+    ) -> Self {
+        Self::RequestReplayed {
+            method: method.to_string(),
+            request_id: request_id.to_string(),
+        }
     }
 }
