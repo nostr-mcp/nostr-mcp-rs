@@ -2,7 +2,7 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{
     common, config, events, follows, groups, key_store, keys, metadata, nip05, nip19, nip30, nip44,
@@ -69,10 +69,10 @@ impl ToolRegistry {
 
 fn schema_map_for<T: JsonSchema>() -> JsonSchemaMap {
     let value = serde_json::to_value(schema_for!(T)).expect("serialize schema");
-    match value {
-        Value::Object(map) => map,
-        _ => panic!("schema root must be a json object"),
-    }
+    value
+        .as_object()
+        .cloned()
+        .expect("schema root must serialize as an object")
 }
 
 fn placeholder_schema() -> JsonSchemaMap {
@@ -80,6 +80,14 @@ fn placeholder_schema() -> JsonSchemaMap {
         ("type".to_string(), Value::String("object".to_string())),
         ("additionalProperties".to_string(), Value::Bool(true)),
     ])
+}
+
+fn nip_list(nip: &[&str]) -> Vec<String> {
+    let mut entries = Vec::with_capacity(nip.len());
+    for entry in nip {
+        entries.push((*entry).to_string());
+    }
+    entries
 }
 
 fn typed_tool<I, O>(name: &str, status: ToolStatus, summary: &str, nip: &[&str]) -> ToolContract
@@ -91,7 +99,7 @@ where
         name: name.to_string(),
         status,
         summary: summary.to_string(),
-        nip: nip.iter().map(|entry| (*entry).to_string()).collect(),
+        nip: nip_list(nip),
         input_schema: schema_map_for::<I>(),
         output_schema: schema_map_for::<O>(),
     }
@@ -102,7 +110,7 @@ fn placeholder_tool(name: &str, status: ToolStatus, summary: &str, nip: &[&str])
         name: name.to_string(),
         status,
         summary: summary.to_string(),
-        nip: nip.iter().map(|entry| (*entry).to_string()).collect(),
+        nip: nip_list(nip),
         input_schema: placeholder_schema(),
         output_schema: placeholder_schema(),
     }
@@ -563,13 +571,17 @@ pub fn generated_registry_artifact_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("generated/registry/tools.json")
 }
 
+fn write_generated_registry_artifact_to(path: &Path) -> std::io::Result<PathBuf> {
+    let parent = path
+        .parent()
+        .expect("generated registry path must have a parent");
+    fs::create_dir_all(parent)?;
+    fs::write(path, generated_registry_json())?;
+    Ok(path.to_path_buf())
+}
+
 pub fn write_generated_registry_artifact() -> std::io::Result<PathBuf> {
-    let path = generated_registry_artifact_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&path, generated_registry_json())?;
-    Ok(path)
+    write_generated_registry_artifact_to(&generated_registry_artifact_path())
 }
 
 pub fn read_generated_registry_artifact() -> ToolRegistry {
@@ -581,11 +593,15 @@ pub fn read_generated_registry_artifact() -> ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::{
-        SPEC_VERSION, ToolRegistry, generated_tool_registry, read_generated_registry_artifact,
+        SPEC_VERSION, ToolRegistry, generated_registry_artifact_path, generated_registry_json,
+        generated_tool_registry, read_generated_registry_artifact,
+        write_generated_registry_artifact, write_generated_registry_artifact_to,
     };
     use std::collections::BTreeSet;
     use std::fs;
+    use std::io::ErrorKind;
     use std::path::PathBuf;
+    use tempfile::tempdir;
 
     fn spec_registry_fixture_path() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../spec/registry/tools.json")
@@ -657,9 +673,15 @@ mod tests {
     #[test]
     fn generated_registry_defines_input_and_output_schemas_for_every_tool() {
         let generated = generated_tool_registry();
+        let mut no_input_schema = generated.tools[0].clone();
+        no_input_schema.input_schema.clear();
+        let mut no_output_schema = generated.tools[0].clone();
+        no_output_schema.output_schema.clear();
 
         assert!(generated.tools.iter().all(|tool| tool.has_input_schema()));
         assert!(generated.tools.iter().all(|tool| tool.has_output_schema()));
+        assert!(!no_input_schema.has_input_schema());
+        assert!(!no_output_schema.has_output_schema());
     }
 
     #[test]
@@ -668,5 +690,55 @@ mod tests {
         let generated = generated_tool_registry();
 
         assert_eq!(artifact, generated);
+    }
+
+    #[test]
+    fn generated_registry_json_round_trips_and_exposes_planned_tools() {
+        let generated = generated_tool_registry();
+        let parsed: ToolRegistry = serde_json::from_str(&generated_registry_json())
+            .expect("parse generated registry json");
+        let stable_count = generated.stable_tools().count();
+        let planned_count = generated.planned_tools().count();
+
+        assert_eq!(parsed, generated);
+        assert!(stable_count > 0);
+        assert!(planned_count > 0);
+        assert_eq!(stable_count + planned_count, generated.tools.len());
+        assert!(generated.tools.iter().all(|tool| tool.has_output_schema()));
+    }
+
+    #[test]
+    fn write_generated_registry_artifact_persists_generated_registry() {
+        let path = write_generated_registry_artifact().expect("write generated registry");
+
+        assert_eq!(path, generated_registry_artifact_path());
+        assert_eq!(
+            read_generated_registry_artifact(),
+            generated_tool_registry()
+        );
+    }
+
+    #[test]
+    fn write_generated_registry_artifact_to_errors_when_parent_is_not_a_directory() {
+        let dir = tempdir().expect("tempdir");
+        let parent_file = dir.path().join("not-a-directory");
+        let output_path = parent_file.join("tools.json");
+        fs::write(&parent_file, "blocking file").expect("write parent file");
+
+        write_generated_registry_artifact_to(&output_path).expect_err("parent creation error");
+
+        assert!(parent_file.is_file());
+        assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn write_generated_registry_artifact_to_errors_when_output_path_is_a_directory() {
+        let dir = tempdir().expect("tempdir");
+        let output_dir = dir.path().join("generated-output");
+        fs::create_dir(&output_dir).expect("create output directory");
+
+        let err = write_generated_registry_artifact_to(&output_dir).expect_err("file write error");
+
+        assert_eq!(err.kind(), ErrorKind::IsADirectory);
     }
 }

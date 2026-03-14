@@ -22,3 +22,28 @@ pub struct RelayInfoResult {
     #[schemars(with = "serde_json::Value")]
     pub document: RelayInformationDocument,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::RelayInfoArgs;
+
+    #[test]
+    fn timeout_defaults_to_ten_seconds() {
+        let args = RelayInfoArgs {
+            relay_url: "wss://relay.example.com".to_string(),
+            timeout_secs: None,
+        };
+
+        assert_eq!(args.timeout(), 10);
+    }
+
+    #[test]
+    fn timeout_uses_explicit_value() {
+        let args = RelayInfoArgs {
+            relay_url: "wss://relay.example.com".to_string(),
+            timeout_secs: Some(18),
+        };
+
+        assert_eq!(args.timeout(), 18);
+    }
+}

@@ -13,6 +13,7 @@ The `0.1.0` line must end at `100/100/100/100` coverage for the shipped crate fa
 - branches
 
 Branch data is required in LCOV. Coverage without branch records is not release-valid.
+Zero-branch crates are valid only when LCOV still emits explicit `BRF` and `BRH` records.
 
 ## staged rollout
 

@@ -67,3 +67,28 @@ pub struct ProfileGetResult {
     #[schemars(with = "Option<serde_json::Value>")]
     pub metadata: Option<Metadata>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ProfileGetArgs;
+
+    #[test]
+    fn profile_get_timeout_defaults_to_ten_seconds() {
+        let args = ProfileGetArgs {
+            pubkey: "pubkey".to_string(),
+            timeout_secs: None,
+        };
+
+        assert_eq!(args.timeout(), 10);
+    }
+
+    #[test]
+    fn profile_get_timeout_uses_explicit_value() {
+        let args = ProfileGetArgs {
+            pubkey: "pubkey".to_string(),
+            timeout_secs: Some(15),
+        };
+
+        assert_eq!(args.timeout(), 15);
+    }
+}

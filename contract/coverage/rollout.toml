@@ -11,7 +11,7 @@ entry_crate = "nostr-mcp-types"
 
 [[rollout.crates]]
 name = "nostr-mcp-types"
-status = "planned"
+status = "required"
 order = 1
 
 [[rollout.crates]]

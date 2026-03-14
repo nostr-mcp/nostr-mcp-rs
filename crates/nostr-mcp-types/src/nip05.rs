@@ -43,3 +43,40 @@ pub struct Nip05VerifyResult {
     pub pubkey_hex: String,
     pub valid: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Nip05ResolveArgs, Nip05VerifyArgs};
+
+    #[test]
+    fn timeout_helpers_default_to_ten_seconds() {
+        let resolve = Nip05ResolveArgs {
+            identifier: "alice@example.com".to_string(),
+            timeout_secs: None,
+        };
+        let verify = Nip05VerifyArgs {
+            identifier: "alice@example.com".to_string(),
+            pubkey: "pubkey".to_string(),
+            timeout_secs: None,
+        };
+
+        assert_eq!(resolve.timeout(), 10);
+        assert_eq!(verify.timeout(), 10);
+    }
+
+    #[test]
+    fn timeout_helpers_use_explicit_values() {
+        let resolve = Nip05ResolveArgs {
+            identifier: "alice@example.com".to_string(),
+            timeout_secs: Some(16),
+        };
+        let verify = Nip05VerifyArgs {
+            identifier: "alice@example.com".to_string(),
+            pubkey: "pubkey".to_string(),
+            timeout_secs: Some(17),
+        };
+
+        assert_eq!(resolve.timeout(), 16);
+        assert_eq!(verify.timeout(), 17);
+    }
+}

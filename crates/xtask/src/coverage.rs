@@ -264,6 +264,7 @@ pub fn read_lcov(path: &Path) -> Result<LcovCoverage, String> {
     let mut branch_covered_lcov: u64 = 0;
     let mut branch_total_brda: u64 = 0;
     let mut branch_covered_brda: u64 = 0;
+    let mut saw_branch_records = false;
 
     for line in raw.lines() {
         if let Some(value) = line.strip_prefix("DA:") {
@@ -294,6 +295,7 @@ pub fn read_lcov(path: &Path) -> Result<LcovCoverage, String> {
             continue;
         }
         if let Some(value) = line.strip_prefix("BRF:") {
+            saw_branch_records = true;
             let parsed: u64 = value.parse().map_err(|err| {
                 format!("invalid BRF value `{value}` in {}: {err}", path.display())
             })?;
@@ -301,6 +303,7 @@ pub fn read_lcov(path: &Path) -> Result<LcovCoverage, String> {
             continue;
         }
         if let Some(value) = line.strip_prefix("BRH:") {
+            saw_branch_records = true;
             let parsed: u64 = value.parse().map_err(|err| {
                 format!("invalid BRH value `{value}` in {}: {err}", path.display())
             })?;
@@ -308,6 +311,7 @@ pub fn read_lcov(path: &Path) -> Result<LcovCoverage, String> {
             continue;
         }
         if let Some(value) = line.strip_prefix("BRDA:") {
+            saw_branch_records = true;
             let fields = value.split(',').collect::<Vec<_>>();
             if fields.len() != 4 {
                 return Err(format!("invalid BRDA record in {}", path.display()));
@@ -353,9 +357,11 @@ pub fn read_lcov(path: &Path) -> Result<LcovCoverage, String> {
     } else {
         (branch_total_lcov, branch_covered_lcov)
     };
-    let branches_available = branch_total > 0;
-    let branch_percent = if branches_available {
+    let branches_available = saw_branch_records;
+    let branch_percent = if branch_total > 0 {
         Some((branch_covered as f64 / branch_total as f64) * 100.0)
+    } else if branches_available {
+        Some(100.0)
     } else {
         None
     };
@@ -1468,6 +1474,48 @@ test_threads = 1
         assert_eq!(lcov.executable_total, 2);
         assert_eq!(lcov.branch_total, 2);
         assert_eq!(lcov.branch_percent, Some(100.0));
+    }
+
+    #[test]
+    fn read_lcov_treats_explicit_zero_branch_records_as_available() {
+        let dir = tempdir().expect("tempdir");
+        let lcov_path = dir.path().join("coverage.info");
+        write_file(&lcov_path, "LF:2\nLH:2\nBRF:0\nBRH:0\n");
+
+        let lcov = read_lcov(&lcov_path).expect("lcov");
+
+        assert!(lcov.branches_available);
+        assert_eq!(lcov.branch_total, 0);
+        assert_eq!(lcov.branch_covered, 0);
+        assert_eq!(lcov.branch_percent, Some(100.0));
+    }
+
+    #[test]
+    fn evaluate_gate_accepts_explicit_zero_branch_records() {
+        let summary = CoverageSummary {
+            functions_percent: 100.0,
+            summary_lines_percent: 100.0,
+            summary_regions_percent: 100.0,
+        };
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("coverage.info");
+        write_file(&path, "DA:1,1\nDA:2,1\nBRF:0\nBRH:0\n");
+        let lcov = read_lcov(&path).expect("lcov");
+
+        let result = evaluate_gate(
+            &summary,
+            &lcov,
+            CoverageThresholds {
+                fail_under_exec_lines: 100.0,
+                fail_under_functions: 100.0,
+                fail_under_regions: 100.0,
+                fail_under_branches: 100.0,
+                require_branches: true,
+            },
+        );
+
+        assert!(result.pass);
+        assert!(result.fail_reasons.is_empty());
     }
 
     #[test]
