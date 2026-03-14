@@ -1517,6 +1517,7 @@ dependencies = [
  "base64",
  "nostr",
  "nostr-mcp-types",
+ "nostr-relay-builder",
  "nostr-relay-pool",
  "nostr-sdk",
  "reqwest",
@@ -1609,6 +1610,23 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "nostr-relay-builder"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ba8e48eaadd5644e7317ca2f892b89a394a8cc57e99fea9f624dc081df1a24"
+dependencies = [
+ "async-utility",
+ "async-wsocket",
+ "atomic-destructor",
+ "hex",
+ "negentropy",
+ "nostr",
+ "nostr-database",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

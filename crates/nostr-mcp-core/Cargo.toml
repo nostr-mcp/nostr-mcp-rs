@@ -25,5 +25,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+nostr-relay-builder = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

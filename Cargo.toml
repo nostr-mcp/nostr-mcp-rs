@@ -32,6 +32,7 @@ dirs = "5"
 glob = "0.3"
 keyring = "2"
 nostr = { version = "0.44.2", features = ["nip44"] }
+nostr-relay-builder = "0.44"
 nostr-relay-pool = { version = "0.44.0" }
 nostr-sdk = { version = "0.44.1" }
 rand = "0.8"
