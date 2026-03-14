@@ -1,0 +1,6 @@
+{
+  "input": "not-a-key",
+  "key_type": "invalid",
+  "valid": false,
+  "error": "Unrecognized key format. Expected npub1..., nsec1..., or 64-character hex"
+}

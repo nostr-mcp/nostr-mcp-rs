@@ -1,0 +1,26 @@
+{
+  "references": [
+    {
+      "raw": "nostr:npub1zutzeysacnf9rru6zqwmxd54mud0k44tst6l70ja5mhv8jjumytsd2x7nu",
+      "bech32": "npub1zutzeysacnf9rru6zqwmxd54mud0k44tst6l70ja5mhv8jjumytsd2x7nu",
+      "reference_type": "npub",
+      "pubkey": "17162c921dc4d2518f9a101db33695df1afb56ab82f5ff3e5da6eec3ca5cd917",
+      "event_id": null,
+      "kind": null,
+      "identifier": null,
+      "relays": null,
+      "error": null
+    },
+    {
+      "raw": "nostr:nsec10allq0gjx7fddtzef0ax00mdps9t2kmtrldkyjfs8l5xruwvh2dq0lhhkp",
+      "bech32": "nsec10allq0gjx7fddtzef0ax00mdps9t2kmtrldkyjfs8l5xruwvh2dq0lhhkp",
+      "reference_type": "nsec",
+      "pubkey": null,
+      "event_id": null,
+      "kind": null,
+      "identifier": null,
+      "relays": null,
+      "error": "secret keys are not supported in references"
+    }
+  ]
+}

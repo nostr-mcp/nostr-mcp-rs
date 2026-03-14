@@ -1,0 +1,39 @@
+{
+  "tags": [
+    {
+      "shortcode": "tractor",
+      "url": "https://example.com/tractor.png",
+      "valid": true
+    },
+    {
+      "shortcode": "bad-emoji",
+      "url": "https://example.com/bad.png",
+      "valid": false,
+      "error": "emoji shortcode must be alphanumeric or underscore"
+    }
+  ],
+  "mentions": [
+    {
+      "raw": ":tractor:",
+      "shortcode": "tractor",
+      "url": "https://example.com/tractor.png",
+      "valid": true
+    },
+    {
+      "raw": ":missing:",
+      "shortcode": "missing",
+      "url": null,
+      "valid": false,
+      "error": "missing emoji tag"
+    },
+    {
+      "raw": ":bad-emoji:",
+      "shortcode": "bad-emoji",
+      "url": null,
+      "valid": false,
+      "error": "invalid emoji shortcode"
+    }
+  ],
+  "kind": 1,
+  "kind_supported": true
+}
