@@ -1,6 +1,6 @@
 use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::metadata::{args_to_profile, fetch_metadata, fetch_profile, publish_metadata};
+use nostr_mcp_core::profile_service::ProfileService;
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
@@ -70,14 +70,14 @@ impl NostrMcpServer {
             ErrorData::invalid_params("no active key; set one with nostr_keys_set_active", None)
         })?;
         let pubkey = PublicKey::from_bech32(&active.public_key).map_err(invalid_params)?;
-        let profile = args_to_profile(&args);
+        let profile = ProfileService::from_args(&args);
 
         self.persist_metadata_settings(settings_store.clone(), pubkey.to_hex(), profile.clone())
             .await?;
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            publish_metadata(&active_client.client, &profile)
+            ProfileService::publish(&active_client.client, &profile)
                 .await
                 .map_err(core_error)?
         } else {
@@ -142,7 +142,7 @@ impl NostrMcpServer {
             active_client.active_pubkey
         };
 
-        let metadata = fetch_metadata(&active_client.client, &target_pubkey)
+        let metadata = ProfileService::fetch_metadata(&active_client.client, &target_pubkey)
             .await
             .map_err(core_error)?;
 
@@ -164,7 +164,7 @@ impl NostrMcpServer {
         let settings_store = self.settings_store().await?;
         let active_client = self.ensure_client_from(keystore, settings_store).await?;
 
-        let result = fetch_profile(&active_client.client, args)
+        let result = ProfileService::fetch_profile(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;

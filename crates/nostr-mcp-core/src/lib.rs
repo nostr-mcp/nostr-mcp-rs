@@ -2,10 +2,13 @@
 
 pub mod client;
 pub mod error;
+pub mod event_authoring_service;
 pub mod event_filters;
 pub mod events;
 pub mod follows;
+pub mod follows_service;
 mod fs;
+pub mod group_moderation_service;
 pub mod groups;
 pub mod key_store;
 pub mod keys;
@@ -19,6 +22,8 @@ pub mod nip44;
 pub mod nip58;
 pub mod nip89;
 pub mod polls;
+pub mod profile_service;
+pub mod protocol_publishing_service;
 pub mod publish;
 pub mod reference_parser;
 pub mod relay_info;

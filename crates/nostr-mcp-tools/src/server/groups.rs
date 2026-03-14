@@ -1,9 +1,6 @@
 use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
-use nostr_mcp_core::groups::{
-    create_group, create_invite, delete_group, delete_group_event, edit_group_metadata, join_group,
-    leave_group, put_user, remove_user,
-};
+use nostr_mcp_core::group_moderation_service::GroupModerationService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::groups::{
     CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
@@ -39,7 +36,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = put_user(&active_client.client, args)
+        let result = GroupModerationService::put_user(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -62,7 +59,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = remove_user(&active_client.client, args)
+        let result = GroupModerationService::remove_user(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -85,7 +82,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = edit_group_metadata(&active_client.client, args)
+        let result = GroupModerationService::edit_metadata(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -108,7 +105,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = delete_group_event(&active_client.client, args)
+        let result = GroupModerationService::delete_event(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -131,7 +128,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = create_group(&active_client.client, args)
+        let result = GroupModerationService::create_group(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -154,7 +151,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = delete_group(&active_client.client, args)
+        let result = GroupModerationService::delete_group(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -177,7 +174,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = create_invite(&active_client.client, args)
+        let result = GroupModerationService::create_invite(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -200,7 +197,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = join_group(&active_client.client, args)
+        let result = GroupModerationService::join(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -223,7 +220,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = leave_group(&active_client.client, args)
+        let result = GroupModerationService::leave(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;

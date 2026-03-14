@@ -1,6 +1,6 @@
 use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::follows::{fetch_follows, publish_follows};
+use nostr_mcp_core::follows_service::FollowsService;
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
@@ -90,7 +90,7 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            publish_follows(&active_client.client, &args.follows)
+            FollowsService::publish(&active_client.client, &args.follows)
                 .await
                 .map_err(core_error)?
         } else {
@@ -142,7 +142,7 @@ impl NostrMcpServer {
             .ensure_client_from(keystore, settings_store.clone())
             .await?;
 
-        let follows = fetch_follows(&active_client.client, &active_client.active_pubkey)
+        let follows = FollowsService::fetch(&active_client.client, &active_client.active_pubkey)
             .await
             .map_err(core_error)?;
 
@@ -214,7 +214,7 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            publish_follows(&active_client.client, &follows)
+            FollowsService::publish(&active_client.client, &follows)
                 .await
                 .map_err(core_error)?
         } else {
@@ -279,7 +279,7 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            publish_follows(&active_client.client, &follows)
+            FollowsService::publish(&active_client.client, &follows)
                 .await
                 .map_err(core_error)?
         } else {

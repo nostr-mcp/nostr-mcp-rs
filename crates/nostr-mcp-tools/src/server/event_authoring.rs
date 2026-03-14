@@ -1,13 +1,7 @@
 use super::{NostrMcpServer, core_error, invalid_params};
 use nostr_mcp_core::client::ActiveClient;
 use nostr_mcp_core::error::CoreError;
-use nostr_mcp_core::polls::{create_poll, vote_poll};
-use nostr_mcp_core::publish::{
-    create_text_event, delete_events, post_anonymous_note, post_group_chat, post_long_form,
-    post_reaction, post_repost, post_text_note, post_thread, publish_signed_event,
-    sign_unsigned_event,
-};
-use nostr_mcp_core::replies::{post_comment, post_reply};
+use nostr_mcp_core::event_authoring_service::EventAuthoringService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
 use nostr_mcp_types::publish::{
@@ -71,7 +65,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let pubkey = self.authoring_pubkey().await?;
-        let result = create_text_event(pubkey, args).map_err(core_error)?;
+        let result = EventAuthoringService::create_text(pubkey, args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -98,7 +92,7 @@ impl NostrMcpServer {
             .await
             .map_err(|err| core_error(CoreError::Nostr(format!("get signer: {err}"))))?;
 
-        let result = sign_unsigned_event(&signer, args)
+        let result = EventAuthoringService::sign_unsigned(&signer, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -121,7 +115,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_text_note(&active_client.client, args)
+        let result = EventAuthoringService::post_text(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -144,7 +138,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_anonymous_note(&active_client.client, args)
+        let result = EventAuthoringService::post_anonymous(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -167,7 +161,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_repost(&active_client.client, args)
+        let result = EventAuthoringService::repost(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -190,7 +184,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = delete_events(&active_client.client, args)
+        let result = EventAuthoringService::delete(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -213,7 +207,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_thread(&active_client.client, args)
+        let result = EventAuthoringService::post_thread(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -236,7 +230,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_long_form(&active_client.client, args)
+        let result = EventAuthoringService::post_long_form(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -259,7 +253,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_group_chat(&active_client.client, args)
+        let result = EventAuthoringService::post_group_chat(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -282,7 +276,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_reaction(&active_client.client, args)
+        let result = EventAuthoringService::post_reaction(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -305,7 +299,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = publish_signed_event(&active_client.client, args)
+        let result = EventAuthoringService::publish_signed(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -333,7 +327,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_reply(&active_client.client, args)
+        let result = EventAuthoringService::post_reply(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -356,7 +350,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = post_comment(&active_client.client, args)
+        let result = EventAuthoringService::post_comment(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -379,7 +373,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = create_poll(&active_client.client, args)
+        let result = EventAuthoringService::create_poll(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -402,7 +396,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = vote_poll(&active_client.client, args)
+        let result = EventAuthoringService::vote_poll(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;

@@ -1,7 +1,6 @@
 use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
-use nostr_mcp_core::nip58::{post_badge_award, post_badge_definition, post_profile_badges};
-use nostr_mcp_core::nip89::{post_handler_info, post_recommendation};
+use nostr_mcp_core::protocol_publishing_service::ProtocolPublishingService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::nip58::{
     Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
@@ -37,7 +36,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = post_recommendation(&active_client.client, args)
+        let result = ProtocolPublishingService::post_recommendation(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -60,7 +59,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = post_handler_info(&active_client.client, args)
+        let result = ProtocolPublishingService::post_handler_info(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -83,7 +82,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = post_badge_definition(&active_client.client, args)
+        let result = ProtocolPublishingService::post_badge_definition(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -106,7 +105,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = post_badge_award(&active_client.client, args)
+        let result = ProtocolPublishingService::post_badge_award(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -129,7 +128,7 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = post_profile_badges(&active_client.client, args)
+        let result = ProtocolPublishingService::post_profile_badges(&active_client.client, args)
             .await
             .map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
