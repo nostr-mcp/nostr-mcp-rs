@@ -1,5 +1,5 @@
 use super::{NostrMcpServer, core_error};
-use nostr_mcp_core::client::ActiveClient;
+use crate::host_runtime::client::ActiveClient;
 use nostr_mcp_core::group_moderation_service::GroupModerationService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::groups::{

@@ -1,9 +1,9 @@
 use super::{NostrMcpServer, core_error};
+use crate::host_runtime::settings::{KeySettings, SettingsStore};
 use nostr_mcp_core::relay_info::fetch_relay_info;
 use nostr_mcp_core::relays::{
     connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
 };
-use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_policy::CapabilityScope;
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::relay_info::RelayInfoArgs;

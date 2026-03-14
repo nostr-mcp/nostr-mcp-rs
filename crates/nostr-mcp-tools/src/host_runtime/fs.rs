@@ -1,4 +1,4 @@
-use crate::error::CoreError;
+use nostr_mcp_core::error::CoreError;
 use std::path::Path;
 
 pub fn ensure_parent_dir(path: &Path) -> Result<(), CoreError> {

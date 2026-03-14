@@ -1,5 +1,5 @@
-use crate::error::CoreError;
-use crate::storage;
+use super::storage;
+use nostr_mcp_core::error::CoreError;
 use nostr_mcp_types::settings::{FollowEntry, ProfileMetadata};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -65,25 +65,12 @@ impl SettingsStore {
         }
         self.persist().await
     }
-
-    pub async fn remove_settings(&self, pubkey_hex: &str) -> Result<(), CoreError> {
-        {
-            let mut data = self.inner.write().await;
-            data.settings.remove(pubkey_hex);
-        }
-        self.persist().await
-    }
-
-    pub async fn all_settings(&self) -> BTreeMap<String, KeySettings> {
-        let data = self.inner.read().await;
-        data.settings.clone()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{KeySettings, SettingsStore};
-    use crate::keystore::ensure_keystore_secret;
+    use crate::host_runtime::keystore::ensure_keystore_secret;
     use std::sync::Arc;
     use tempfile::tempdir;
 

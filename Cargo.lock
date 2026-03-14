@@ -1495,24 +1495,17 @@ dependencies = [
 name = "nostr-mcp-core"
 version = "0.1.0-alpha.1"
 dependencies = [
- "aes-gcm",
- "argon2",
  "base64",
- "chrono",
- "keyring",
  "nostr",
  "nostr-mcp-types",
  "nostr-relay-pool",
  "nostr-sdk",
- "rand 0.8.5",
  "reqwest",
- "schemars",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "zeroize",
 ]
 
 [[package]]
@@ -1528,12 +1521,19 @@ dependencies = [
 name = "nostr-mcp-tools"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "aes-gcm",
  "anyhow",
+ "argon2",
+ "base64",
+ "chrono",
  "dirs",
+ "keyring",
+ "nostr",
  "nostr-mcp-core",
  "nostr-mcp-policy",
  "nostr-mcp-types",
  "nostr-sdk",
+ "rand 0.8.5",
  "rmcp",
  "schemars",
  "serde",
@@ -1541,6 +1541,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use super::{NostrMcpServer, core_error};
-use nostr_mcp_core::client::ActiveClient;
+use crate::host_runtime::client::ActiveClient;
 use nostr_mcp_core::event_filters::EventFilterService;
 use nostr_mcp_core::events::{list_events, list_long_form_events, query_events, search_events};
 use nostr_mcp_core::nip30::parse_nip30_emojis;

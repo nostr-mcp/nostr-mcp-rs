@@ -1,4 +1,4 @@
-use crate::error::CoreError;
+use nostr_mcp_core::error::CoreError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

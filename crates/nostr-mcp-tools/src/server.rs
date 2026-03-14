@@ -8,17 +8,17 @@ mod protocol_publishing;
 mod protocol_utils;
 mod relays;
 
+use crate::host_runtime::client::{ActiveClient, ClientStore};
+use crate::host_runtime::key_store::KeyStore;
+#[cfg(not(feature = "keyring"))]
+use crate::host_runtime::secrets::InMemorySecretStore;
+#[cfg(feature = "keyring")]
+use crate::host_runtime::secrets::KeyringSecretStore;
+use crate::host_runtime::secrets::SecretStore;
+use crate::host_runtime::settings::SettingsStore;
 use crate::runtime::{NostrMcpPaths, NostrMcpRuntime};
 use crate::util;
-use nostr_mcp_core::client::{ActiveClient, ClientStore};
 use nostr_mcp_core::error::CoreError;
-use nostr_mcp_core::key_store::KeyStore;
-#[cfg(not(feature = "keyring"))]
-use nostr_mcp_core::secrets::InMemorySecretStore;
-#[cfg(feature = "keyring")]
-use nostr_mcp_core::secrets::KeyringSecretStore;
-use nostr_mcp_core::secrets::SecretStore;
-use nostr_mcp_core::settings::SettingsStore;
 use nostr_mcp_policy::{
     AuthoringAction, CapabilityScope, IdentityClass, PolicyDecision, PolicyDecisionEffect,
     PolicyRequest, SignerBackend, SignerMethod, SignerPolicy,

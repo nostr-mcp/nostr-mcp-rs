@@ -1,13 +1,13 @@
-use crate::error::CoreError;
-use crate::fs::ensure_parent_dir;
-use crate::secrets::SecretStore;
-use crate::storage;
+use super::fs::ensure_parent_dir;
+use super::secrets::SecretStore;
+use super::storage;
 use chrono::Utc;
 use nostr::prelude::*;
+use nostr_mcp_core::error::CoreError;
 use nostr_mcp_types::key_store::{ExportFormat, ExportResult, KeyEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use zeroize::Zeroize;
@@ -295,11 +295,6 @@ impl KeyStore {
 
         Ok(result)
     }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub fn secrets(&self) -> Arc<dyn SecretStore> {
         self.secrets.clone()
     }
@@ -324,7 +319,7 @@ fn normalize_label(label: String) -> Result<String, CoreError> {
 #[cfg(test)]
 mod tests {
     use super::KeyStore;
-    use crate::secrets::InMemorySecretStore;
+    use crate::host_runtime::secrets::InMemorySecretStore;
     use nostr::prelude::{Keys, ToBech32};
     use nostr_mcp_types::key_store::ExportFormat;
     use std::sync::Arc;

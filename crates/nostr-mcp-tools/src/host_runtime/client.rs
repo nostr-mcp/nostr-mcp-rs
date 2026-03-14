@@ -1,8 +1,8 @@
-use crate::error::CoreError;
-use crate::follows;
-use crate::key_store::KeyStore;
-use crate::settings::{KeySettings, SettingsStore};
+use super::key_store::KeyStore;
+use super::settings::{KeySettings, SettingsStore};
 use nostr::prelude::*;
+use nostr_mcp_core::error::CoreError;
+use nostr_mcp_core::follows;
 use nostr_sdk::prelude::*;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OnceCell, RwLock};
@@ -167,9 +167,9 @@ impl ClientStore {
 #[cfg(test)]
 mod tests {
     use super::ClientStore;
-    use crate::key_store::KeyStore;
-    use crate::secrets::InMemorySecretStore;
-    use crate::settings::SettingsStore;
+    use crate::host_runtime::key_store::KeyStore;
+    use crate::host_runtime::secrets::InMemorySecretStore;
+    use crate::host_runtime::settings::SettingsStore;
     use std::sync::Arc;
     use tempfile::tempdir;
 
