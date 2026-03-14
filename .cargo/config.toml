@@ -1,5 +1,6 @@
 [alias]
 coverage-report = "run -p xtask -- coverage report"
+coverage-release-crates = "run -p xtask -- coverage release-crates"
 coverage-required-crates = "run -p xtask -- coverage required-crates"
 coverage-run-crate = "run -p xtask -- coverage run-crate"
 coverage-workspace-crates = "run -p xtask -- coverage workspace-crates"

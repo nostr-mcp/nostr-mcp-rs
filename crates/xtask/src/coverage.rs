@@ -136,6 +136,16 @@ struct CoverageRequiredPolicy {
     threshold_profile: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CoverageReleaseContract {
+    release: CoverageReleaseList,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoverageReleaseList {
+    crates: Vec<String>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 struct CoverageProfilesFile {
     #[serde(default)]
@@ -215,6 +225,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("validate-contract") => validate_contract(),
         Some("required-crates") => list_required_crates(),
+        Some("release-crates") => list_release_crates(),
         Some("workspace-crates") => list_workspace_crates(),
         Some("run-crate") => run_crate(&args[1..]),
         Some("report") => report_gate(&args[1..]),
@@ -507,6 +518,10 @@ fn read_required_contract(root: &Path) -> Result<CoverageRequiredContract, Strin
     )
 }
 
+fn read_release_contract(root: &Path) -> Result<CoverageReleaseContract, String> {
+    parse_toml::<CoverageReleaseContract>(&coverage_contract_dir(root).join("release-crates.toml"))
+}
+
 fn read_rollout_contract(root: &Path) -> Result<CoverageRolloutContract, String> {
     parse_toml::<CoverageRolloutContract>(&coverage_contract_dir(root).join("rollout.toml"))
 }
@@ -563,6 +578,7 @@ fn validate_contract_at_root(root: &Path) -> Result<(), String> {
 
     let rollout = read_rollout_contract(root)?;
     let required = read_required_contract(root)?;
+    let release = read_release_contract(root)?;
     let profiles = read_coverage_profiles(root)?;
 
     let policy = rollout.policy;
@@ -587,6 +603,7 @@ fn validate_contract_at_root(root: &Path) -> Result<(), String> {
     let mut rollout_names = BTreeSet::new();
     let mut rollout_required = BTreeSet::new();
     let mut rollout_orders = BTreeSet::new();
+    let mut rollout_order_map = BTreeMap::new();
     for item in &rollout.rollout.crates {
         if item.name.trim().is_empty() {
             return Err("coverage rollout includes an empty crate name".to_string());
@@ -615,6 +632,7 @@ fn validate_contract_at_root(root: &Path) -> Result<(), String> {
                 ));
             }
         }
+        rollout_order_map.insert(item.name.clone(), item.order);
     }
     if !rollout_names.contains(&rollout.rollout.entry_crate) {
         return Err(format!(
@@ -638,6 +656,44 @@ fn validate_contract_at_root(root: &Path) -> Result<(), String> {
             .collect::<Vec<_>>();
         return Err(format!(
             "coverage rollout must match workspace crates exactly; missing={missing:?} extra={extra:?}"
+        ));
+    }
+
+    let mut release_set = BTreeSet::new();
+    let mut release_orders = Vec::new();
+    for crate_name in &release.release.crates {
+        if crate_name.trim().is_empty() {
+            return Err("coverage release crates list includes an empty crate name".to_string());
+        }
+        if !release_set.insert(crate_name.clone()) {
+            return Err(format!(
+                "coverage release crates list includes duplicate crate `{crate_name}`"
+            ));
+        }
+        if !workspace_set.contains(crate_name) {
+            return Err(format!(
+                "coverage release crates list includes unknown workspace crate `{crate_name}`"
+            ));
+        }
+        let Some(order) = rollout_order_map.get(crate_name) else {
+            return Err(format!(
+                "coverage release crate `{crate_name}` is missing from rollout.toml"
+            ));
+        };
+        release_orders.push(*order);
+    }
+    if release_set.is_empty() {
+        return Err("coverage release crates list must not be empty".to_string());
+    }
+    let mut sorted_release_orders = release_orders.clone();
+    sorted_release_orders.sort_unstable();
+    if release_orders != sorted_release_orders {
+        return Err("coverage release crates must follow rollout.toml order exactly".to_string());
+    }
+    if !release_set.contains(&rollout.rollout.entry_crate) {
+        return Err(format!(
+            "coverage rollout entry crate `{}` must be part of release-crates.toml",
+            rollout.rollout.entry_crate
         ));
     }
 
@@ -668,6 +724,11 @@ fn validate_contract_at_root(root: &Path) -> Result<(), String> {
         if !workspace_set.contains(crate_name) {
             return Err(format!(
                 "coverage required crates list includes unknown workspace crate `{crate_name}`"
+            ));
+        }
+        if !release_set.contains(crate_name) {
+            return Err(format!(
+                "coverage required crate `{crate_name}` must be part of release-crates.toml"
             ));
         }
         if !rollout_required.contains(crate_name) {
@@ -718,6 +779,15 @@ fn list_required_crates() -> Result<(), String> {
     let root = workspace_root();
     let required = read_required_contract(&root)?;
     for crate_name in required.required.crates {
+        println!("{crate_name}");
+    }
+    Ok(())
+}
+
+fn list_release_crates() -> Result<(), String> {
+    let root = workspace_root();
+    let release = read_release_contract(&root)?;
+    for crate_name in release.release.crates {
         println!("{crate_name}");
     }
     Ok(())
@@ -1055,6 +1125,7 @@ edition = "2024"
     fn write_contract(
         root: &Path,
         required_block: &str,
+        release_block: &str,
         rollout_block: &str,
         profiles_block: &str,
     ) {
@@ -1064,6 +1135,13 @@ edition = "2024"
                 .join("coverage")
                 .join("required-crates.toml"),
             required_block,
+        );
+        write_file(
+            &root
+                .join("contract")
+                .join("coverage")
+                .join("release-crates.toml"),
+            release_block,
         );
         write_file(
             &root.join("contract").join("coverage").join("rollout.toml"),
@@ -1087,6 +1165,9 @@ crates = []
 [policy]
 mode = "staged"
 threshold_profile = "strict_100"
+"#,
+            r#"[release]
+crates = ["crate-a", "crate-b"]
 "#,
             r#"[policy]
 fail_under_exec_lines = 100.0
@@ -1137,6 +1218,9 @@ crates = []
 mode = "staged"
 threshold_profile = "strict_100"
 "#,
+            r#"[release]
+crates = ["crate-a", "crate-b"]
+"#,
             r#"[policy]
 fail_under_exec_lines = 100.0
 fail_under_functions = 100.0
@@ -1182,6 +1266,9 @@ crates = []
 mode = "staged"
 threshold_profile = "strict_100"
 "#,
+            r#"[release]
+crates = ["crate-a", "crate-b"]
+"#,
             r#"[policy]
 fail_under_exec_lines = 100.0
 fail_under_functions = 100.0
@@ -1224,6 +1311,112 @@ test_threads = 4
         assert!(profile.no_default_features);
         assert_eq!(profile.features, vec!["custom".to_string()]);
         assert_eq!(profile.test_threads, Some(4));
+    }
+
+    #[test]
+    fn validate_contract_rejects_required_crate_outside_release_set() {
+        let dir = tempdir().expect("tempdir");
+        write_workspace(dir.path());
+        write_contract(
+            dir.path(),
+            r#"[required]
+crates = ["xtask"]
+
+[policy]
+mode = "blocking"
+threshold_profile = "strict_100"
+"#,
+            r#"[release]
+crates = ["crate-a", "crate-b"]
+"#,
+            r#"[policy]
+fail_under_exec_lines = 100.0
+fail_under_functions = 100.0
+fail_under_regions = 100.0
+fail_under_branches = 100.0
+require_branches = true
+
+[rollout]
+strategy = "crate-by-crate"
+entry_crate = "crate-a"
+
+[[rollout.crates]]
+name = "crate-a"
+status = "planned"
+order = 1
+
+[[rollout.crates]]
+name = "crate-b"
+status = "planned"
+order = 2
+
+[[rollout.crates]]
+name = "xtask"
+status = "required"
+order = 3
+"#,
+            r#"[profiles.default]
+no_default_features = false
+features = []
+test_threads = 1
+"#,
+        );
+
+        let err = validate_contract_at_root(dir.path()).expect_err("release drift should fail");
+        assert!(err.contains("release-crates.toml"));
+    }
+
+    #[test]
+    fn validate_contract_rejects_release_order_drift() {
+        let dir = tempdir().expect("tempdir");
+        write_workspace(dir.path());
+        write_contract(
+            dir.path(),
+            r#"[required]
+crates = []
+
+[policy]
+mode = "staged"
+threshold_profile = "strict_100"
+"#,
+            r#"[release]
+crates = ["crate-b", "crate-a"]
+"#,
+            r#"[policy]
+fail_under_exec_lines = 100.0
+fail_under_functions = 100.0
+fail_under_regions = 100.0
+fail_under_branches = 100.0
+require_branches = true
+
+[rollout]
+strategy = "crate-by-crate"
+entry_crate = "crate-a"
+
+[[rollout.crates]]
+name = "crate-a"
+status = "planned"
+order = 1
+
+[[rollout.crates]]
+name = "crate-b"
+status = "planned"
+order = 2
+
+[[rollout.crates]]
+name = "xtask"
+status = "planned"
+order = 3
+"#,
+            r#"[profiles.default]
+no_default_features = false
+features = []
+test_threads = 1
+"#,
+        );
+
+        let err = validate_contract_at_root(dir.path()).expect_err("release order should fail");
+        assert!(err.contains("follow rollout.toml order"));
     }
 
     #[test]

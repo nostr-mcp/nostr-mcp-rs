@@ -1,0 +1,10 @@
+[release]
+crates = [
+  "nostr-mcp-types",
+  "nostr-mcp-policy",
+  "nostr-mcp-core",
+  "nostr-mcp-nip46",
+  "nostr-mcp-server",
+  "nostr-mcp-transport-stdio",
+  "nostr-mcp",
+]
