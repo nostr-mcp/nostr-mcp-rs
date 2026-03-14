@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::capability::{AuthoringAction, CapabilityScope, SignerMethod};
+use crate::identity::{IdentityClass, SignerBackend};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 pub struct PolicyRequest {
@@ -13,6 +14,10 @@ pub struct PolicyRequest {
     pub authoring_action: Option<AuthoringAction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_kind: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_identity_class: Option<IdentityClass>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_signer_backend: Option<SignerBackend>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relay_targets: Vec<String>,
 }
@@ -106,6 +111,8 @@ mod tests {
             signer_method: Some(SignerMethod::SignEvent),
             authoring_action: Some(AuthoringAction::Publish),
             event_kind: Some(1),
+            required_identity_class: None,
+            required_signer_backend: None,
             relay_targets: Vec::new(),
         }
         .with_relay_targets(vec![
@@ -131,6 +138,8 @@ mod tests {
             signer_method: Some(SignerMethod::SignEvent),
             authoring_action: Some(AuthoringAction::Sign),
             event_kind: Some(30023),
+            required_identity_class: None,
+            required_signer_backend: None,
             relay_targets: Vec::new(),
         };
 

@@ -78,6 +78,8 @@ mod tests {
             signer_method: Some(SignerMethod::SignEvent),
             authoring_action: Some(AuthoringAction::Sign),
             event_kind: Some(1),
+            required_identity_class: None,
+            required_signer_backend: None,
             relay_targets: Vec::new(),
         };
         let event = PolicyAuditEvent::signer_request_created(
@@ -100,6 +102,8 @@ mod tests {
             signer_method: Some(SignerMethod::SignEvent),
             authoring_action: Some(AuthoringAction::Publish),
             event_kind: Some(30023),
+            required_identity_class: None,
+            required_signer_backend: None,
             relay_targets: vec!["wss://relay.radroots.org".to_string()],
         };
         let decision = PolicyDecision::deny(PolicyDecisionReason::RelayTargetOutOfScope, request);

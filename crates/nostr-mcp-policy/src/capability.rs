@@ -53,6 +53,15 @@ impl AuthoringAction {
     pub const fn requires_network_write(self) -> bool {
         matches!(self, Self::Publish)
     }
+
+    pub const fn capability_scope(self) -> CapabilityScope {
+        match self {
+            Self::BuildUnsigned => CapabilityScope::BuildUnsignedEvents,
+            Self::Preview => CapabilityScope::PreviewEvents,
+            Self::Sign => CapabilityScope::SignEvents,
+            Self::Publish => CapabilityScope::PublishEvents,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -126,6 +135,22 @@ mod tests {
         assert!(!AuthoringAction::Sign.requires_network_write());
         assert!(AuthoringAction::Publish.requires_signer());
         assert!(AuthoringAction::Publish.requires_network_write());
+        assert_eq!(
+            AuthoringAction::BuildUnsigned.capability_scope(),
+            super::CapabilityScope::BuildUnsignedEvents
+        );
+        assert_eq!(
+            AuthoringAction::Preview.capability_scope(),
+            super::CapabilityScope::PreviewEvents
+        );
+        assert_eq!(
+            AuthoringAction::Sign.capability_scope(),
+            super::CapabilityScope::SignEvents
+        );
+        assert_eq!(
+            AuthoringAction::Publish.capability_scope(),
+            super::CapabilityScope::PublishEvents
+        );
     }
 
     #[test]
