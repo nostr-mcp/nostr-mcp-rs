@@ -280,7 +280,7 @@ fn looks_like_coordinate(value: &str) -> bool {
 mod tests {
     use super::{decode_nip19, encode_nip19};
     use nostr::nips::nip19::ToBech32;
-    use nostr::prelude::{EventId, Keys};
+    use nostr::prelude::{Coordinate, EventId, Kind, Keys};
     use nostr_mcp_types::nip19::{
         Nip19DecodeArgs, Nip19EncodeArgs, Nip19EncodeTarget, Nip19EntityType,
     };
@@ -322,6 +322,34 @@ mod tests {
     }
 
     #[test]
+    fn decode_accepts_hex_input() {
+        let input = "a".repeat(64);
+        let result = decode_nip19(Nip19DecodeArgs {
+            input: input.clone(),
+            allow_secret: None,
+        })
+        .unwrap();
+
+        assert!(matches!(result.input_type, Nip19EntityType::Hex));
+        assert_eq!(result.input, input);
+        assert!(result.data.pubkey_hex.is_none());
+    }
+
+    #[test]
+    fn decode_accepts_nsec_when_enabled() {
+        let keys = Keys::generate();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+        let result = decode_nip19(Nip19DecodeArgs {
+            input: nsec,
+            allow_secret: Some(true),
+        })
+        .unwrap();
+
+        assert!(matches!(result.input_type, Nip19EntityType::Nsec));
+        assert!(result.data.is_secret);
+    }
+
+    #[test]
     fn decode_rejects_nsec_when_disabled() {
         let keys = Keys::generate();
         let nsec = keys.secret_key().to_bech32().unwrap();
@@ -331,6 +359,17 @@ mod tests {
         })
         .unwrap_err();
         assert!(err.to_string().contains("allow_secret"));
+    }
+
+    #[test]
+    fn decode_rejects_invalid_entity() {
+        let err = decode_nip19(Nip19DecodeArgs {
+            input: "npub1invalid".to_string(),
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid nip19 entity"));
     }
 
     #[test]
@@ -350,6 +389,24 @@ mod tests {
     }
 
     #[test]
+    fn encode_npub_from_npub() {
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let result = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Npub,
+            input: npub.clone(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        assert_eq!(result.encoded, npub);
+    }
+
+    #[test]
     fn encode_nsec_requires_allow_secret() {
         let keys = Keys::generate();
         let err = encode_nip19(Nip19EncodeArgs {
@@ -363,6 +420,47 @@ mod tests {
         })
         .unwrap_err();
         assert!(err.to_string().contains("allow_secret"));
+    }
+
+    #[test]
+    fn encode_nsec_when_enabled() {
+        let keys = Keys::generate();
+        let result = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Nsec,
+            input: keys.secret_key().to_secret_hex(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: Some(true),
+        })
+        .unwrap();
+
+        assert_eq!(result.encoded, keys.secret_key().to_bech32().unwrap());
+    }
+
+    #[test]
+    fn encode_note_round_trip() {
+        let event_id = EventId::all_zeros();
+        let result = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Note,
+            input: event_id.to_hex(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        let decoded = decode_nip19(Nip19DecodeArgs {
+            input: result.encoded,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        assert!(matches!(decoded.input_type, Nip19EntityType::Note));
+        assert_eq!(decoded.data.event_id_hex, Some(event_id.to_hex()));
     }
 
     #[test]
@@ -388,6 +486,23 @@ mod tests {
         assert!(matches!(decoded.input_type, Nip19EntityType::Nprofile));
         assert_eq!(decoded.data.pubkey_hex, Some(keys.public_key().to_hex()));
         assert_eq!(decoded.data.relays, Some(vec![relay]));
+    }
+
+    #[test]
+    fn encode_nprofile_rejects_invalid_relay() {
+        let keys = Keys::generate();
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Nprofile,
+            input: keys.public_key().to_hex(),
+            relays: Some(vec!["not-a-relay".to_string()]),
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid relay url"));
     }
 
     #[test]
@@ -419,6 +534,49 @@ mod tests {
     }
 
     #[test]
+    fn encode_nevent_without_optional_fields() {
+        let event_id = EventId::all_zeros();
+        let result = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Nevent,
+            input: event_id.to_hex(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        let decoded = decode_nip19(Nip19DecodeArgs {
+            input: result.encoded,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        assert!(matches!(decoded.input_type, Nip19EntityType::Nevent));
+        assert_eq!(decoded.data.event_id_hex, Some(event_id.to_hex()));
+        assert_eq!(decoded.data.author_hex, None);
+        assert_eq!(decoded.data.kind, None);
+        assert_eq!(decoded.data.relays, Some(vec![]));
+    }
+
+    #[test]
+    fn encode_nevent_rejects_invalid_author() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Nevent,
+            input: EventId::all_zeros().to_hex(),
+            relays: None,
+            author: Some("bad-author".to_string()),
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid pubkey"));
+    }
+
+    #[test]
     fn encode_naddr_from_parts() {
         let keys = Keys::generate();
         let relay = "wss://relay.example.com".to_string();
@@ -443,5 +601,133 @@ mod tests {
         assert_eq!(decoded.data.kind, Some(30000));
         assert_eq!(decoded.data.identifier, Some("profile".to_string()));
         assert_eq!(decoded.data.relays, Some(vec![relay]));
+    }
+
+    #[test]
+    fn encode_naddr_from_coordinate_input() {
+        let keys = Keys::generate();
+        let coordinate = Coordinate {
+            kind: Kind::from(30000_u16),
+            public_key: keys.public_key(),
+            identifier: "profile".to_string(),
+        };
+        let result = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Naddr,
+            input: coordinate.to_string(),
+            relays: None,
+            author: None,
+            kind: Some(1),
+            identifier: Some("ignored".to_string()),
+            allow_secret: None,
+        })
+        .unwrap();
+
+        let decoded = decode_nip19(Nip19DecodeArgs {
+            input: result.encoded,
+            allow_secret: None,
+        })
+        .unwrap();
+
+        assert!(matches!(decoded.input_type, Nip19EntityType::Naddr));
+        assert_eq!(decoded.data.pubkey_hex, Some(keys.public_key().to_hex()));
+        assert_eq!(decoded.data.kind, Some(30000));
+        assert_eq!(decoded.data.identifier, Some("profile".to_string()));
+    }
+
+    #[test]
+    fn encode_naddr_requires_kind_for_pubkey_input() {
+        let keys = Keys::generate();
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Naddr,
+            input: keys.public_key().to_hex(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("kind is required for naddr"));
+    }
+
+    #[test]
+    fn encode_naddr_rejects_invalid_coordinate() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Naddr,
+            input: "30000:not-a-pubkey:profile".to_string(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid coordinate"));
+    }
+
+    #[test]
+    fn encode_naddr_rejects_invalid_nostr_coordinate() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Naddr,
+            input: "nostr:naddr1invalid".to_string(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid coordinate"));
+    }
+
+    #[test]
+    fn encode_rejects_empty_input() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Npub,
+            input: " ".to_string(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("input must not be empty"));
+    }
+
+    #[test]
+    fn encode_note_rejects_invalid_event_id() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Note,
+            input: "bad-event-id".to_string(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid event id"));
+    }
+
+    #[test]
+    fn encode_nsec_rejects_invalid_secret_key() {
+        let err = encode_nip19(Nip19EncodeArgs {
+            target: Nip19EncodeTarget::Nsec,
+            input: "nsec1invalid".to_string(),
+            relays: None,
+            author: None,
+            kind: None,
+            identifier: None,
+            allow_secret: Some(true),
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid secret key"));
     }
 }

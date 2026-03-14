@@ -56,7 +56,7 @@ pub fn verify_key(key: &str) -> VerifyResult {
                 error: Some(e.to_string()),
             },
         }
-    } else if key.len() == 64 && key.chars().all(|c| c.is_ascii_hexdigit()) {
+    } else if key.len() == 64 {
         match PublicKey::from_hex(key) {
             Ok(pk) => match pk.to_bech32() {
                 Ok(npub) => VerifyResult {
@@ -182,6 +182,58 @@ mod tests {
     }
 
     #[test]
+    fn verify_key_trims_input() {
+        let keys = Keys::generate();
+        let hex = format!("  {}  ", keys.public_key().to_hex());
+
+        let result = verify_key(&hex);
+
+        assert!(result.valid);
+        assert_eq!(result.input, keys.public_key().to_hex());
+    }
+
+    #[test]
+    fn verify_key_rejects_invalid_npub() {
+        let result = verify_key("npub1invalid");
+
+        assert!(!result.valid);
+        assert!(matches!(result.key_type, KeyType::Npub));
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn verify_key_rejects_invalid_nsec() {
+        let result = verify_key("nsec1invalid");
+
+        assert!(!result.valid);
+        assert!(matches!(result.key_type, KeyType::Nsec));
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn verify_key_rejects_invalid_hex_public_key() {
+        let result = verify_key(&"g".repeat(64));
+
+        assert!(!result.valid);
+        assert!(matches!(result.key_type, KeyType::Hex));
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn verify_key_rejects_invalid_format() {
+        let result = verify_key("not-a-key");
+
+        assert!(!result.valid);
+        assert!(matches!(result.key_type, KeyType::Invalid));
+        assert!(
+            result
+                .error
+                .unwrap()
+                .contains("Unrecognized key format. Expected npub1..., nsec1..., or 64-character hex")
+        );
+    }
+
+    #[test]
     fn derive_public_accepts_nsec_and_hex() {
         let keys = Keys::generate();
         let nsec = keys.secret_key().to_bech32().unwrap();
@@ -209,5 +261,19 @@ mod tests {
             err.to_string(),
             "invalid input: Invalid private key format. Expected nsec1... or 64-character hex"
         );
+    }
+
+    #[test]
+    fn derive_public_rejects_invalid_nsec() {
+        let err = derive_public("nsec1invalid").unwrap_err();
+
+        assert!(err.to_string().contains("invalid input"));
+    }
+
+    #[test]
+    fn derive_public_rejects_invalid_hex_secret() {
+        let err = derive_public(&"0".repeat(64)).unwrap_err();
+
+        assert!(err.to_string().contains("invalid input"));
     }
 }
