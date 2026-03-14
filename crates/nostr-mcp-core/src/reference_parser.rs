@@ -3,33 +3,38 @@ use nostr_mcp_types::references::{
     ParseReferencesArgs, ParseReferencesResult, ReferenceType, TextReference,
 };
 
-pub fn parse_text_references(args: ParseReferencesArgs) -> ParseReferencesResult {
-    let references = extract_nostr_references(&args.content);
-    ParseReferencesResult { references }
-}
+pub struct ReferenceParser;
 
-fn extract_nostr_references(content: &str) -> Vec<TextReference> {
-    let mut out = Vec::new();
-    let bytes = content.as_bytes();
-    let mut index = 0;
-
-    while let Some(pos) = find_subslice(bytes, b"nostr:", index) {
-        let start = pos + "nostr:".len();
-        let mut end = start;
-        while end < bytes.len() && is_bech32_char(bytes[end]) {
-            end += 1;
+impl ReferenceParser {
+    pub fn parse(args: ParseReferencesArgs) -> ParseReferencesResult {
+        ParseReferencesResult {
+            references: Self::parse_content(&args.content),
         }
-
-        if end > start {
-            let bech32 = &content[start..end];
-            let raw = &content[pos..end];
-            out.push(decode_reference(raw, bech32));
-        }
-
-        index = end.max(pos + 1);
     }
 
-    out
+    pub fn parse_content(content: &str) -> Vec<TextReference> {
+        let mut references = Vec::new();
+        let bytes = content.as_bytes();
+        let mut index = 0;
+
+        while let Some(position) = find_subslice(bytes, b"nostr:", index) {
+            let start = position + "nostr:".len();
+            let mut end = start;
+            while end < bytes.len() && is_bech32_char(bytes[end]) {
+                end += 1;
+            }
+
+            if end > start {
+                let bech32 = &content[start..end];
+                let raw = &content[position..end];
+                references.push(decode_reference(raw, bech32));
+            }
+
+            index = end.max(position + 1);
+        }
+
+        references
+    }
 }
 
 fn decode_reference(raw: &str, bech32: &str) -> TextReference {
@@ -53,7 +58,13 @@ fn decode_reference(raw: &str, bech32: &str) -> TextReference {
             event_id: None,
             kind: None,
             identifier: None,
-            relays: Some(profile.relays.iter().map(|r| r.to_string()).collect()),
+            relays: Some(
+                profile
+                    .relays
+                    .iter()
+                    .map(|relay| relay.to_string())
+                    .collect(),
+            ),
             error: None,
         },
         Ok(Nip19::EventId(event_id)) => TextReference {
@@ -71,22 +82,28 @@ fn decode_reference(raw: &str, bech32: &str) -> TextReference {
             raw: raw.to_string(),
             bech32: bech32.to_string(),
             reference_type: ReferenceType::Nevent,
-            pubkey: event.author.map(|pk| pk.to_hex()),
+            pubkey: event.author.map(|pubkey| pubkey.to_hex()),
             event_id: Some(event.event_id.to_hex()),
-            kind: event.kind.map(|k| k.as_u16()),
+            kind: event.kind.map(|kind| kind.as_u16()),
             identifier: None,
-            relays: Some(event.relays.iter().map(|r| r.to_string()).collect()),
+            relays: Some(event.relays.iter().map(|relay| relay.to_string()).collect()),
             error: None,
         },
-        Ok(Nip19::Coordinate(coord)) => TextReference {
+        Ok(Nip19::Coordinate(coordinate)) => TextReference {
             raw: raw.to_string(),
             bech32: bech32.to_string(),
             reference_type: ReferenceType::Naddr,
-            pubkey: Some(coord.public_key.to_hex()),
+            pubkey: Some(coordinate.public_key.to_hex()),
             event_id: None,
-            kind: Some(coord.kind.as_u16()),
-            identifier: Some(coord.identifier.clone()),
-            relays: Some(coord.relays.iter().map(|r| r.to_string()).collect()),
+            kind: Some(coordinate.kind.as_u16()),
+            identifier: Some(coordinate.identifier.clone()),
+            relays: Some(
+                coordinate
+                    .relays
+                    .iter()
+                    .map(|relay| relay.to_string())
+                    .collect(),
+            ),
             error: None,
         },
         Ok(Nip19::Secret(_)) => TextReference {
@@ -125,12 +142,12 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
     haystack[start..]
         .windows(needle.len())
         .position(|window| window == needle)
-        .map(|pos| pos + start)
+        .map(|position| position + start)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::extract_nostr_references;
+    use super::ReferenceParser;
     use nostr::prelude::*;
     use nostr_mcp_types::references::{ParseReferencesArgs, ReferenceType};
 
@@ -144,19 +161,18 @@ mod tests {
         let note = event.id.to_bech32().unwrap();
 
         let content = format!("Hello nostr:{npub} and nostr:{note}!");
-        let args = ParseReferencesArgs { content };
-        let references = extract_nostr_references(&args.content);
+        let references = ReferenceParser::parse_content(&content);
 
         assert_eq!(references.len(), 2);
         assert!(
             references
                 .iter()
-                .any(|r| matches!(r.reference_type, ReferenceType::Npub))
+                .any(|reference| matches!(reference.reference_type, ReferenceType::Npub))
         );
         assert!(
             references
                 .iter()
-                .any(|r| matches!(r.reference_type, ReferenceType::Note))
+                .any(|reference| matches!(reference.reference_type, ReferenceType::Note))
         );
     }
 
@@ -164,8 +180,7 @@ mod tests {
     fn parse_text_references_stops_on_punctuation() {
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
-        let content = format!("hi nostr:{npub}, ok");
-        let references = extract_nostr_references(&content);
+        let references = ReferenceParser::parse_content(&format!("hi nostr:{npub}, ok"));
 
         assert_eq!(references.len(), 1);
         assert_eq!(references[0].bech32, npub);
@@ -173,13 +188,24 @@ mod tests {
 
     #[test]
     fn parse_text_references_marks_invalid() {
-        let content = "nostr:note1invalid".to_string();
-        let references = extract_nostr_references(&content);
+        let references = ReferenceParser::parse_content("nostr:note1invalid");
 
         assert_eq!(references.len(), 1);
         assert!(matches!(
             references[0].reference_type,
             ReferenceType::Invalid
         ));
+    }
+
+    #[test]
+    fn parse_wraps_references_in_result_shape() {
+        let keys = Keys::generate();
+        let args = ParseReferencesArgs {
+            content: format!("nostr:{}", keys.public_key().to_bech32().unwrap()),
+        };
+
+        let result = ReferenceParser::parse(args);
+
+        assert_eq!(result.references.len(), 1);
     }
 }

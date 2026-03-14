@@ -1,14 +1,10 @@
-use super::{NostrMcpServer, core_error, invalid_params};
+use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
-use nostr_mcp_core::events::{
-    list_events, list_long_form_events, query_events, search_events,
-    subscription_targets_mentions_me, subscription_targets_my_metadata,
-    subscription_targets_my_notes,
-};
-use nostr_mcp_core::nip01;
+use nostr_mcp_core::event_filters::EventFilterService;
+use nostr_mcp_core::events::{list_events, list_long_form_events, query_events, search_events};
 use nostr_mcp_core::nip30::parse_nip30_emojis;
 use nostr_mcp_core::polls::get_poll_results;
-use nostr_mcp_core::references::parse_text_references;
+use nostr_mcp_core::reference_parser::ReferenceParser;
 use nostr_mcp_types::events::{
     EventItem, EventItemsResult, EventsListArgs, LongFormListArgs, QueryEventsArgs,
     SearchEventsArgs,
@@ -66,68 +62,9 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<EventsListArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        nip01::validate_time_bounds(args.since, args.until).map_err(core_error)?;
-        nip01::validate_limit(args.limit).map_err(core_error)?;
         let active_client = self.event_query_client().await?;
-
-        let since_ts = args.since.map(Timestamp::from);
-        let until_ts = args.until.map(Timestamp::from);
-
-        let preset = args.preset.to_ascii_lowercase();
-        let mut filter = match preset.as_str() {
-            "my_notes" => {
-                subscription_targets_my_notes(active_client.active_pubkey, since_ts, until_ts).await
-            }
-            "mentions_me" => {
-                subscription_targets_mentions_me(active_client.active_pubkey, since_ts, until_ts)
-                    .await
-            }
-            "my_metadata" => subscription_targets_my_metadata(active_client.active_pubkey).await,
-            "by_author" => {
-                let npub_ref = args.author_npub.as_ref().ok_or_else(|| {
-                    ErrorData::invalid_params(
-                        "author_npub is required for preset 'by_author'",
-                        None,
-                    )
-                })?;
-                let pubkey = PublicKey::from_bech32(npub_ref).map_err(invalid_params)?;
-
-                let default_since = Timestamp::now() - 86400 * 7;
-                let mut filter = Filter::new()
-                    .author(pubkey)
-                    .since(since_ts.unwrap_or(default_since));
-
-                if let Some(until) = until_ts {
-                    filter = filter.until(until);
-                }
-                filter
-            }
-            "by_kind" => {
-                let kind_num = args.kind.ok_or_else(|| {
-                    ErrorData::invalid_params("kind is required for preset 'by_kind'", None)
-                })?;
-
-                let default_since = Timestamp::now() - 86400 * 7;
-                let mut filter = Filter::new()
-                    .kind(Kind::from(kind_num))
-                    .since(since_ts.unwrap_or(default_since));
-
-                if let Some(until) = until_ts {
-                    filter = filter.until(until);
-                }
-
-                if let Some(npub_ref) = &args.author_npub {
-                    let pubkey = PublicKey::from_bech32(npub_ref).map_err(invalid_params)?;
-                    filter = filter.author(pubkey);
-                }
-                filter
-            }
-            _ => return Err(ErrorData::invalid_params("unknown preset", None)),
-        };
-
-        if let Some(limit) = args.limit {
-            filter = filter.limit(limit as usize);
-        }
+        let filter = EventFilterService::preset_filter(active_client.active_pubkey, &args)
+            .map_err(core_error)?;
 
         let events = list_events(&active_client.client, filter, args.timeout())
             .await
@@ -156,7 +93,7 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ParseReferencesArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let result = parse_text_references(args);
+        let result = ReferenceParser::parse(args);
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

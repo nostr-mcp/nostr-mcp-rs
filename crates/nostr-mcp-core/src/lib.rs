@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod error;
+pub mod event_filters;
 pub mod events;
 pub mod follows;
 mod fs;
@@ -19,7 +20,7 @@ pub mod nip58;
 pub mod nip89;
 pub mod polls;
 pub mod publish;
-pub mod references;
+pub mod reference_parser;
 pub mod relay_info;
 pub mod relays;
 pub mod replies;
