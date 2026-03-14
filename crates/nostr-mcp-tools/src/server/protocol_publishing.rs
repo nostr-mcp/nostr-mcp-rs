@@ -1,7 +1,7 @@
 use super::{NostrMcpServer, core_error};
-use crate::host_runtime::client::ActiveClient;
 use nostr_mcp_core::protocol_publishing_service::ProtocolPublishingService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
+use nostr_mcp_server::host_runtime::client::ActiveClient;
 use nostr_mcp_types::nip58::{
     Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
 };

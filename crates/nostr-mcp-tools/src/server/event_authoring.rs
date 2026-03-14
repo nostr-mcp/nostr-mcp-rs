@@ -1,8 +1,8 @@
 use super::{NostrMcpServer, core_error, invalid_params};
-use crate::host_runtime::client::ActiveClient;
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_core::event_authoring_service::EventAuthoringService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
+use nostr_mcp_server::host_runtime::client::ActiveClient;
 use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
 use nostr_mcp_types::publish::{
     CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,

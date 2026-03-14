@@ -1,8 +1,8 @@
 use super::{NostrMcpServer, core_error, host_runtime_error, invalid_params};
-use crate::host_runtime::settings::{KeySettings, SettingsStore};
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::follows_service::FollowsService;
 use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
+use nostr_mcp_server::host_runtime::settings::{KeySettings, SettingsStore};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::follows::{
     AddFollowArgs, FollowsLookupResult, FollowsMutationResult, PublishFollowsResult,

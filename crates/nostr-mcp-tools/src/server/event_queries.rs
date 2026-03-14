@@ -1,10 +1,10 @@
 use super::{NostrMcpServer, core_error};
-use crate::host_runtime::client::ActiveClient;
 use nostr_mcp_core::event_filters::EventFilterService;
 use nostr_mcp_core::events::{list_events, list_long_form_events, query_events, search_events};
 use nostr_mcp_core::nip30::parse_nip30_emojis;
 use nostr_mcp_core::polls::get_poll_results;
 use nostr_mcp_core::reference_parser::ReferenceParser;
+use nostr_mcp_server::host_runtime::client::ActiveClient;
 use nostr_mcp_types::events::{
     EventItem, EventItemsResult, EventsListArgs, LongFormListArgs, QueryEventsArgs,
     SearchEventsArgs,

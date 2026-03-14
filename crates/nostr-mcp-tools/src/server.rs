@@ -8,23 +8,21 @@ mod protocol_publishing;
 mod protocol_utils;
 mod relays;
 
-use crate::host_runtime::client::{ActiveClient, ClientStore};
-use crate::host_runtime::error::{HostRuntimeError, HostRuntimeResult};
-use crate::host_runtime::key_store::KeyStore;
-#[cfg(not(feature = "keyring"))]
-use crate::host_runtime::secrets::InMemorySecretStore;
-#[cfg(feature = "keyring")]
-use crate::host_runtime::secrets::KeyringSecretStore;
-use crate::host_runtime::secrets::SecretStore;
-use crate::host_runtime::settings::SettingsStore;
-use crate::runtime::{NostrMcpPaths, NostrMcpRuntime};
-use crate::util;
 use nostr_mcp_core::error::CoreError;
 use nostr_mcp_policy::{
-    AuthoringAction, CapabilityScope, IdentityClass, PolicyDecision, PolicyDecisionEffect,
-    PolicyRequest, SignerBackend, SignerMethod, SignerPolicy,
+    AuthoringAction, CapabilityScope, PolicyDecision, PolicyDecisionEffect, PolicyRequest,
+    SignerMethod,
 };
-use nostr_mcp_server::NostrMcpServerCatalog;
+use nostr_mcp_server::{
+    NostrMcpRuntime, NostrMcpServerCatalog, NostrMcpServerServices,
+    host_runtime::{
+        client::ActiveClient,
+        error::{HostRuntimeError, HostRuntimeResult},
+        key_store::KeyStore,
+        settings::SettingsStore,
+    },
+    service::NostrMcpServerServiceError,
+};
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::router::tool::ToolRouter,
@@ -33,44 +31,8 @@ use rmcp::{
     transport::stdio,
 };
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
 use tracing::info;
-
-fn secret_store(runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
-    #[cfg(feature = "keyring")]
-    {
-        Arc::new(KeyringSecretStore::new(&runtime.keyring_service))
-    }
-    #[cfg(not(feature = "keyring"))]
-    {
-        let _ = runtime;
-        Arc::new(InMemorySecretStore::new())
-    }
-}
-
-async fn load_or_init_keystore(
-    paths: &NostrMcpPaths,
-    runtime: &NostrMcpRuntime,
-) -> HostRuntimeResult<KeyStore> {
-    let pass = Arc::new(util::ensure_keystore_secret(
-        paths.keystore_secret_path.as_path(),
-    )?);
-    KeyStore::load_or_init(
-        paths.index_path.clone(),
-        pass,
-        secret_store(runtime),
-        runtime.allow_local_key_test_support,
-    )
-    .await
-}
-
-async fn load_or_init_settings(paths: &NostrMcpPaths) -> HostRuntimeResult<SettingsStore> {
-    let pass = Arc::new(util::ensure_keystore_secret(
-        paths.keystore_secret_path.as_path(),
-    )?);
-    SettingsStore::load_or_init(paths.settings_path.clone(), pass).await
-}
 
 fn core_error(err: CoreError) -> ErrorData {
     if let CoreError::InvalidInput(msg) = err {
@@ -109,76 +71,31 @@ fn policy_error(decision: PolicyDecision) -> ErrorData {
     ErrorData::invalid_request(message, data)
 }
 
-struct ServerStores {
-    keystore: Arc<KeyStore>,
-    settings_store: Arc<SettingsStore>,
-}
-
-struct ServerContext {
-    runtime: NostrMcpRuntime,
-    stores: OnceCell<ServerStores>,
-    client_store: ClientStore,
-}
-
-impl ServerContext {
-    fn new(runtime: NostrMcpRuntime) -> Self {
-        Self {
-            runtime,
-            stores: OnceCell::const_new(),
-            client_store: ClientStore::new(),
-        }
-    }
-
-    async fn stores(&self) -> HostRuntimeResult<&ServerStores> {
-        let runtime = self.runtime.clone();
-        self.stores
-            .get_or_try_init(move || {
-                let runtime = runtime.clone();
-                async move {
-                    let keystore = Arc::new(load_or_init_keystore(&runtime.paths, &runtime).await?);
-                    let settings_store = Arc::new(load_or_init_settings(&runtime.paths).await?);
-                    Ok(ServerStores {
-                        keystore,
-                        settings_store,
-                    })
-                }
-            })
-            .await
+fn server_service_error(err: NostrMcpServerServiceError) -> ErrorData {
+    match err {
+        NostrMcpServerServiceError::HostRuntime(err) => host_runtime_error(err),
+        NostrMcpServerServiceError::PolicyDecision(decision) => policy_error(decision),
     }
 }
 
 #[derive(Clone)]
 pub struct NostrMcpServer {
     tool_router: ToolRouter<Self>,
-    context: Arc<ServerContext>,
+    services: Arc<NostrMcpServerServices>,
 }
 
 impl NostrMcpServer {
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn runtime(&self) -> &NostrMcpRuntime {
+        self.services.runtime()
+    }
+
     async fn initialize(&self) -> HostRuntimeResult<()> {
-        self.context.stores().await?;
-        Ok(())
-    }
-
-    fn configured_signer_backend(&self) -> SignerBackend {
-        self.context.runtime.signer_policy.signer_backend
-    }
-
-    fn local_key_test_support_enabled(&self) -> bool {
-        self.context.runtime.allow_local_key_test_support
-    }
-
-    fn required_signing_identity_class(&self) -> IdentityClass {
-        match self.configured_signer_backend() {
-            SignerBackend::Nip46Remote => IdentityClass::RemoteSignerSession,
-            SignerBackend::LocalTestOnly => IdentityClass::SignerBacked,
-        }
+        self.services.initialize().await
     }
 
     fn capability_request(&self, capability_scope: CapabilityScope) -> PolicyRequest {
-        PolicyRequest {
-            capability_scope: Some(capability_scope),
-            ..PolicyRequest::default()
-        }
+        self.services.capability_request(capability_scope)
     }
 
     fn raw_secret_request(
@@ -186,12 +103,8 @@ impl NostrMcpServer {
         capability_scope: CapabilityScope,
         signer_method: Option<SignerMethod>,
     ) -> PolicyRequest {
-        PolicyRequest {
-            capability_scope: Some(capability_scope),
-            signer_method,
-            required_signer_backend: Some(SignerBackend::LocalTestOnly),
-            ..PolicyRequest::default()
-        }
+        self.services
+            .raw_secret_request(capability_scope, signer_method)
     }
 
     fn authoring_request(
@@ -202,81 +115,37 @@ impl NostrMcpServer {
         event_kind: Option<u16>,
         relay_targets: Option<Vec<String>>,
     ) -> PolicyRequest {
-        let request = PolicyRequest {
-            capability_scope: Some(capability_scope),
+        self.services.authoring_request(
+            capability_scope,
+            authoring_action,
             signer_method,
-            authoring_action: Some(authoring_action),
             event_kind,
-            required_identity_class: authoring_action
-                .requires_signer()
-                .then(|| self.required_signing_identity_class()),
-            required_signer_backend: authoring_action
-                .requires_signer()
-                .then(|| self.configured_signer_backend()),
-            ..PolicyRequest::default()
-        };
-        relay_targets.map_or(request.clone(), |targets| {
-            request.with_relay_targets(targets)
-        })
-    }
-
-    async fn effective_signer_policy(&self) -> Result<SignerPolicy, ErrorData> {
-        let mut policy = self.context.runtime.signer_policy.clone();
-
-        if matches!(policy.signer_backend, SignerBackend::LocalTestOnly) {
-            if !self.local_key_test_support_enabled() {
-                policy.identity_class = IdentityClass::WatchOnly;
-                return Ok(policy);
-            }
-            let keystore = self.keystore().await?;
-            let active = keystore.get_active().await;
-            let has_secret = match active {
-                Some(active_key) => keystore
-                    .secrets()
-                    .get(&active_key.label)
-                    .map_err(host_runtime_error)?
-                    .is_some(),
-                None => false,
-            };
-            policy.identity_class = if has_secret {
-                IdentityClass::SignerBacked
-            } else {
-                IdentityClass::WatchOnly
-            };
-        }
-
-        Ok(policy)
+            relay_targets,
+        )
     }
 
     async fn authorize_policy_request(&self, request: PolicyRequest) -> Result<(), ErrorData> {
-        let policy = self.effective_signer_policy().await?;
-        let decision = policy.evaluate_request(request);
-        match decision.effect {
-            PolicyDecisionEffect::Allow => Ok(()),
-            PolicyDecisionEffect::Deny | PolicyDecisionEffect::Escalate => {
-                Err(policy_error(decision))
-            }
-        }
+        self.services
+            .authorize_policy_request(request)
+            .await
+            .map_err(server_service_error)
     }
 
     async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
-        let stores = self.context.stores().await.map_err(host_runtime_error)?;
-        Ok(stores.keystore.clone())
+        self.services.keystore().await.map_err(host_runtime_error)
     }
 
     fn ensure_local_key_test_support(&self) -> Result<(), ErrorData> {
-        if self.local_key_test_support_enabled() {
-            return Ok(());
-        }
-        Err(ErrorData::invalid_request(
-            "local key test support is disabled",
-            None,
-        ))
+        self.services
+            .ensure_local_key_test_support()
+            .map_err(host_runtime_error)
     }
 
     async fn settings_store(&self) -> Result<Arc<SettingsStore>, ErrorData> {
-        let stores = self.context.stores().await.map_err(host_runtime_error)?;
-        Ok(stores.settings_store.clone())
+        self.services
+            .settings_store()
+            .await
+            .map_err(host_runtime_error)
     }
 
     async fn ensure_client_from(
@@ -284,26 +153,24 @@ impl NostrMcpServer {
         keystore: Arc<KeyStore>,
         settings_store: Arc<SettingsStore>,
     ) -> Result<ActiveClient, ErrorData> {
-        self.context
-            .client_store
-            .ensure_client(keystore, settings_store)
+        self.services
+            .ensure_client_from(keystore, settings_store)
             .await
             .map_err(host_runtime_error)
     }
 
     async fn reset_client(&self) -> Result<(), ErrorData> {
-        self.context
-            .client_store
-            .reset()
+        self.services
+            .reset_client()
             .await
             .map_err(host_runtime_error)
     }
 
     #[cfg(test)]
     async fn client(&self) -> Result<ActiveClient, ErrorData> {
-        let stores = self.context.stores().await.map_err(host_runtime_error)?;
-        self.ensure_client_from(stores.keystore.clone(), stores.settings_store.clone())
-            .await
+        let keystore = self.keystore().await?;
+        let settings_store = self.settings_store().await?;
+        self.ensure_client_from(keystore, settings_store).await
     }
 }
 
@@ -325,7 +192,7 @@ impl NostrMcpServer {
                 + Self::protocol_publishing_tool_router()
                 + Self::protocol_utility_tool_router()
                 + Self::metadata_tool_router(),
-            context: Arc::new(ServerContext::new(runtime)),
+            services: Arc::new(NostrMcpServerServices::new(runtime)),
         }
     }
 }
@@ -397,12 +264,11 @@ pub async fn start_stdio_server_with_runtime(
 #[cfg(test)]
 mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer, core_error, host_runtime_error};
-    use crate::host_runtime::error::HostRuntimeError;
-    use crate::runtime::default_runtime_signer_policy;
     use nostr_mcp_core::CoreError;
     use nostr_mcp_policy::{
         CapabilityScope, RelayTargetScope, SignerBackend, SignerPolicy, default_signer_policy,
     };
+    use nostr_mcp_server::{default_runtime_signer_policy, host_runtime::error::HostRuntimeError};
     use nostr_mcp_types::common::EmptyArgs;
     use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
     use nostr_mcp_types::key_store::{
@@ -1665,14 +1531,14 @@ mod tests {
         let client_a = server_a.client().await.unwrap();
         let client_b = server_b.client().await.unwrap();
 
-        assert_eq!(server_a.context.runtime.server_name, "nostr-a");
-        assert_eq!(server_b.context.runtime.server_name, "nostr-b");
+        assert_eq!(server_a.runtime().server_name, "nostr-a");
+        assert_eq!(server_b.runtime().server_name, "nostr-b");
         assert_eq!(
-            server_a.context.runtime.paths.config_root,
+            server_a.runtime().paths.config_root,
             dir_a.path().to_path_buf()
         );
         assert_eq!(
-            server_b.context.runtime.paths.config_root,
+            server_b.runtime().paths.config_root,
             dir_b.path().to_path_buf()
         );
         assert!(dir_a.path().join("keystore.secret").exists());
