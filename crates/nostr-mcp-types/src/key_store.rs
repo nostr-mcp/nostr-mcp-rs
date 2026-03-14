@@ -52,3 +52,36 @@ pub struct ExportArgs {
 fn default_export_format() -> ExportFormat {
     ExportFormat::Bech32
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct KeyEntry {
+    pub label: String,
+    pub public_key: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct KeyRemovalResult {
+    pub removed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct KeysListResult {
+    pub keys: Vec<KeyEntry>,
+    pub count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct ExportResult {
+    pub label: String,
+    pub public_key_npub: String,
+    pub public_key_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_key_nsec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_key_hex: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}

@@ -1,25 +1,10 @@
 use crate::error::CoreError;
-use crate::settings::ProfileMetadata;
-use nostr_mcp_types::metadata::{ProfileGetArgs, SetMetadataArgs};
+use nostr_mcp_types::metadata::{
+    MetadataResult, ProfileGetArgs, ProfileGetResult, SetMetadataArgs,
+};
+use nostr_mcp_types::settings::ProfileMetadata;
 use nostr_sdk::prelude::*;
-use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Serialize)]
-pub struct MetadataResult {
-    pub saved: bool,
-    pub published: bool,
-    pub event_id: Option<String>,
-    pub pubkey: Option<String>,
-    pub success_relays: Vec<String>,
-    pub failed_relays: HashMap<String, String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProfileGetResult {
-    pub pubkey: String,
-    pub metadata: Option<Metadata>,
-}
 
 pub fn profile_to_nostr_metadata(profile: &ProfileMetadata) -> Result<Metadata, CoreError> {
     let mut metadata = Metadata::new();
@@ -177,6 +162,7 @@ fn parse_pubkey(value: &str) -> Result<PublicKey, CoreError> {
 mod tests {
     use super::{args_to_profile, parse_pubkey, profile_to_nostr_metadata};
     use nostr_mcp_types::metadata::SetMetadataArgs;
+    use nostr_mcp_types::settings::ProfileMetadata;
     use nostr_sdk::prelude::*;
 
     #[test]
@@ -202,7 +188,7 @@ mod tests {
 
     #[test]
     fn profile_to_metadata_rejects_bad_url() {
-        let profile = crate::settings::ProfileMetadata {
+        let profile = ProfileMetadata {
             name: None,
             display_name: None,
             about: None,

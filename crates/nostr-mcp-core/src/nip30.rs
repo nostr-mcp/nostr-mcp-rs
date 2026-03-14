@@ -1,34 +1,6 @@
 use nostr::prelude::Url;
-use nostr_mcp_types::nip30::Nip30ParseArgs;
-use serde::Serialize;
+use nostr_mcp_types::nip30::{Nip30EmojiMention, Nip30EmojiTag, Nip30ParseArgs, Nip30ParseResult};
 use std::collections::HashMap;
-
-#[derive(Debug, Serialize)]
-pub struct Nip30ParseResult {
-    pub tags: Vec<Nip30EmojiTag>,
-    pub mentions: Vec<Nip30EmojiMention>,
-    pub kind: Option<u16>,
-    pub kind_supported: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip30EmojiTag {
-    pub shortcode: String,
-    pub url: Option<String>,
-    pub valid: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip30EmojiMention {
-    pub raw: String,
-    pub shortcode: String,
-    pub url: Option<String>,
-    pub valid: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
 
 pub fn parse_nip30_emojis(args: Nip30ParseArgs) -> Nip30ParseResult {
     let (tags, map) = parse_emoji_tags(args.tags.unwrap_or_default());

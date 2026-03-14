@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::error::CoreError;
 use nostr::nips::nip22::CommentTarget;
+use nostr_mcp_types::publish::SendResult;
 use nostr_mcp_types::replies::{PostCommentArgs, PostReplyArgs};
 use nostr_sdk::prelude::*;
 
@@ -24,10 +25,7 @@ fn parse_relay_hint(hint: &Option<String>) -> Result<Option<RelayUrl>, CoreError
         .transpose()
 }
 
-pub async fn post_reply(
-    client: &Client,
-    args: PostReplyArgs,
-) -> Result<crate::publish::SendResult, CoreError> {
+pub async fn post_reply(client: &Client, args: PostReplyArgs) -> Result<SendResult, CoreError> {
     if args.reply_to_kind == 1 {
         let (builder, to_relays) = nip10_reply_builder(args)?;
         crate::publish::publish_event_builder(client, builder, to_relays).await
@@ -133,10 +131,7 @@ fn nip22_comment_builder(
     Ok((builder, args.to_relays))
 }
 
-pub async fn post_comment(
-    client: &Client,
-    args: PostCommentArgs,
-) -> Result<crate::publish::SendResult, CoreError> {
+pub async fn post_comment(client: &Client, args: PostCommentArgs) -> Result<SendResult, CoreError> {
     let (builder, to_relays) = comment_builder(args)?;
     crate::publish::publish_event_builder(client, builder, to_relays).await
 }

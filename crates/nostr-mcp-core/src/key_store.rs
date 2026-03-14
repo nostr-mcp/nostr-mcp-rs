@@ -4,8 +4,7 @@ use crate::secrets::SecretStore;
 use crate::storage;
 use chrono::Utc;
 use nostr::prelude::*;
-use nostr_mcp_types::key_store::ExportFormat;
-use schemars::JsonSchema;
+use nostr_mcp_types::key_store::{ExportFormat, ExportResult, KeyEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -13,14 +12,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use zeroize::Zeroize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct KeyEntry {
-    pub label: String,
-    pub public_key: String,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeyFile {
     pub active: Option<String>,
     pub keys: BTreeMap<String, KeyEntry>,
@@ -311,19 +303,6 @@ impl KeyStore {
     pub fn secrets(&self) -> Arc<dyn SecretStore> {
         self.secrets.clone()
     }
-}
-
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct ExportResult {
-    pub label: String,
-    pub public_key_npub: String,
-    pub public_key_hex: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_key_nsec: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_key_hex: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub warning: Option<String>,
 }
 
 async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> Result<(), CoreError> {

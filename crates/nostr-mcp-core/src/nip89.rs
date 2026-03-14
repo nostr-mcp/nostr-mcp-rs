@@ -1,6 +1,7 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::publish_event_builder;
 use nostr_mcp_types::nip89::{Nip89HandlerInfoArgs, Nip89RecommendArgs};
+use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
 
 pub async fn post_recommendation(

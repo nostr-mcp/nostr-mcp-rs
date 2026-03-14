@@ -1,29 +1,11 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::publish_event_builder;
 use nostr::nips::nip88::{Poll, PollOption as Nip88PollOption, PollResponse, PollType};
-use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
+use nostr_mcp_types::polls::{CreatePollArgs, PollResultOption, PollResults, VotePollArgs};
+use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-
-#[derive(Debug, Serialize)]
-pub struct PollResultOption {
-    pub option_id: String,
-    pub label: String,
-    pub votes: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PollResults {
-    pub poll_id: String,
-    pub question: String,
-    pub poll_type: String,
-    pub total_votes: u64,
-    pub options: Vec<PollResultOption>,
-    pub ended: bool,
-    pub ends_at: Option<u64>,
-}
 
 pub async fn create_poll(client: &Client, args: CreatePollArgs) -> Result<SendResult, CoreError> {
     let question = ensure_non_empty("question", &args.question)?;

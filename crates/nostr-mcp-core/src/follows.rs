@@ -1,24 +1,7 @@
 use crate::error::CoreError;
+use nostr_mcp_types::follows::PublishFollowsResult;
 use nostr_mcp_types::settings::FollowEntry;
 use nostr_sdk::prelude::*;
-use serde::Serialize;
-use std::collections::HashMap;
-
-#[derive(Debug, Serialize)]
-pub struct FollowsResult {
-    pub follows: Vec<FollowEntry>,
-    pub count: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PublishFollowsResult {
-    pub saved: bool,
-    pub published: bool,
-    pub event_id: Option<String>,
-    pub pubkey: Option<String>,
-    pub success_relays: Vec<String>,
-    pub failed_relays: HashMap<String, String>,
-}
 
 fn follows_to_tags(follows: &[FollowEntry]) -> Result<Vec<Tag>, CoreError> {
     let mut tags = Vec::with_capacity(follows.len());

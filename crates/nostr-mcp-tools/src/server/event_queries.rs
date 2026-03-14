@@ -10,7 +10,8 @@ use nostr_mcp_core::nip30::parse_nip30_emojis;
 use nostr_mcp_core::polls::get_poll_results;
 use nostr_mcp_core::references::parse_text_references;
 use nostr_mcp_types::events::{
-    EventsListArgs, LongFormListArgs, QueryEventsArgs, SearchEventsArgs,
+    EventItem, EventItemsResult, EventsListArgs, LongFormListArgs, QueryEventsArgs,
+    SearchEventsArgs,
 };
 use nostr_mcp_types::nip30::Nip30ParseArgs;
 use nostr_mcp_types::polls::GetPollResultsArgs;
@@ -22,20 +23,21 @@ use rmcp::{
     tool, tool_router,
 };
 
-fn event_item(event: Event) -> serde_json::Value {
-    serde_json::json!({
-        "id": event.id.to_string(),
-        "kind": event.kind.as_u16(),
-        "pubkey": event.pubkey.to_string(),
-        "created_at": event.created_at.as_secs(),
-        "content": event.content,
-        "tags": event.tags.to_vec(),
-    })
+fn event_item(event: Event) -> EventItem {
+    EventItem {
+        id: event.id.to_string(),
+        kind: event.kind.as_u16(),
+        pubkey: event.pubkey.to_string(),
+        created_at: event.created_at.as_secs(),
+        content: event.content,
+        tags: event.tags.iter().cloned().map(|tag| tag.to_vec()).collect(),
+    }
 }
 
 fn event_items_result(events: Vec<Event>) -> Result<CallToolResult, ErrorData> {
-    let items: Vec<serde_json::Value> = events.into_iter().map(event_item).collect();
-    let content = Content::json(serde_json::json!({ "items": items, "count": items.len() }))?;
+    let items: Vec<EventItem> = events.into_iter().map(event_item).collect();
+    let count = items.len();
+    let content = Content::json(serde_json::json!(EventItemsResult { items, count }))?;
     Ok(CallToolResult::success(vec![content]))
 }
 

@@ -1,36 +1,7 @@
 use nostr::nips::nip19::{FromBech32, Nip19};
-use nostr_mcp_types::references::ParseReferencesArgs;
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct ParseReferencesResult {
-    pub references: Vec<TextReference>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReferenceType {
-    Npub,
-    Nprofile,
-    Note,
-    Nevent,
-    Naddr,
-    Nsec,
-    Invalid,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TextReference {
-    pub raw: String,
-    pub bech32: String,
-    pub reference_type: ReferenceType,
-    pub pubkey: Option<String>,
-    pub event_id: Option<String>,
-    pub kind: Option<u16>,
-    pub identifier: Option<String>,
-    pub relays: Option<Vec<String>>,
-    pub error: Option<String>,
-}
+use nostr_mcp_types::references::{
+    ParseReferencesArgs, ParseReferencesResult, ReferenceType, TextReference,
+};
 
 pub fn parse_text_references(args: ParseReferencesArgs) -> ParseReferencesResult {
     let references = extract_nostr_references(&args.content);
@@ -159,9 +130,9 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_nostr_references, ReferenceType};
+    use super::extract_nostr_references;
     use nostr::prelude::*;
-    use nostr_mcp_types::references::ParseReferencesArgs;
+    use nostr_mcp_types::references::{ParseReferencesArgs, ReferenceType};
 
     #[test]
     fn parse_text_references_finds_multiple_mentions() {
@@ -177,12 +148,16 @@ mod tests {
         let references = extract_nostr_references(&args.content);
 
         assert_eq!(references.len(), 2);
-        assert!(references
-            .iter()
-            .any(|r| matches!(r.reference_type, ReferenceType::Npub)));
-        assert!(references
-            .iter()
-            .any(|r| matches!(r.reference_type, ReferenceType::Note)));
+        assert!(
+            references
+                .iter()
+                .any(|r| matches!(r.reference_type, ReferenceType::Npub))
+        );
+        assert!(
+            references
+                .iter()
+                .any(|r| matches!(r.reference_type, ReferenceType::Note))
+        );
     }
 
     #[test]

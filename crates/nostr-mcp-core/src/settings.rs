@@ -1,34 +1,12 @@
 use crate::error::CoreError;
 use crate::storage;
-use nostr_mcp_types::settings::FollowEntry;
+use nostr_mcp_types::settings::{FollowEntry, ProfileMetadata};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
-pub struct ProfileMetadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub about: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub picture: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub banner: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nip05: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lud06: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lud16: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub website: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 pub struct KeySettings {

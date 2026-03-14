@@ -1,5 +1,5 @@
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct PollOption {
@@ -30,4 +30,22 @@ pub struct VotePollArgs {
 pub struct GetPollResultsArgs {
     pub poll_event_id: String,
     pub timeout_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct PollResultOption {
+    pub option_id: String,
+    pub label: String,
+    pub votes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct PollResults {
+    pub poll_id: String,
+    pub question: String,
+    pub poll_type: String,
+    pub total_votes: u64,
+    pub options: Vec<PollResultOption>,
+    pub ended: bool,
+    pub ends_at: Option<u64>,
 }

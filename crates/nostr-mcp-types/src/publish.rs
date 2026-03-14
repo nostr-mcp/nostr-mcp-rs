@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct PostTextArgs {
@@ -93,4 +94,26 @@ pub struct PublishSignedEventArgs {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SignEventArgs {
     pub unsigned_event_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SendResult {
+    pub id: String,
+    pub success: Vec<String>,
+    pub failed: HashMap<String, String>,
+    pub pubkey: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct CreateTextResult {
+    pub event_id: String,
+    pub pubkey: String,
+    pub unsigned_event_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SignEventResult {
+    pub event_id: String,
+    pub pubkey: String,
+    pub event_json: String,
 }

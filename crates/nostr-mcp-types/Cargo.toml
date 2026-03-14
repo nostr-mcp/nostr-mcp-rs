@@ -13,6 +13,7 @@ description = "Canonical contract and registry types for nostr-mcp"
 keywords = ["nostr", "mcp", "schema"]
 
 [dependencies]
+nostr = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

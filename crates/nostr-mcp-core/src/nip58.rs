@@ -1,8 +1,9 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::publish_event_builder;
 use nostr_mcp_types::nip58::{
     Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58BadgeImage, Nip58ProfileBadgesArgs,
 };
+use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
 use std::str::FromStr;
 

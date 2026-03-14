@@ -1,17 +1,8 @@
 use crate::error::CoreError;
+use nostr_mcp_types::relays::RelayStatusRow;
 use nostr_mcp_types::relays::{RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs};
 use nostr_sdk::prelude::*;
-use serde::Serialize;
 use std::collections::HashMap;
-
-#[derive(Debug, Serialize)]
-pub struct RelayStatusRow {
-    pub url: String,
-    pub status: String,
-    pub read: bool,
-    pub write: bool,
-    pub discovery: bool,
-}
 
 #[derive(Debug, Clone, Copy)]
 enum RelayMode {

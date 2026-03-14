@@ -2,7 +2,8 @@ use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::keys::{derive_public, verify_key};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::key_store::{
-    ExportArgs, GenerateArgs, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+    ExportArgs, GenerateArgs, ImportArgs, KeyRemovalResult, KeysListResult, RemoveArgs,
+    RenameLabelArgs, SetActiveArgs,
 };
 use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
 use rmcp::{
@@ -62,7 +63,9 @@ impl NostrMcpServer {
         let keystore = self.keystore().await?;
         let removed = keystore.remove(args.label).await.map_err(core_error)?;
         self.reset_client().await?;
-        let content = Content::json(serde_json::json!({ "removed": removed.is_some() }))?;
+        let content = Content::json(serde_json::json!(KeyRemovalResult {
+            removed: removed.is_some(),
+        }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
@@ -74,9 +77,12 @@ impl NostrMcpServer {
         let keystore = self.keystore().await?;
         let keys = keystore.list().await;
         let active_label = keystore.get_active().await.map(|key| key.label);
-        let payload =
-            serde_json::json!({ "keys": keys, "count": keys.len(), "active": active_label });
-        let content = Content::json(payload)?;
+        let count = keys.len();
+        let content = Content::json(serde_json::json!(KeysListResult {
+            keys,
+            count,
+            active: active_label,
+        }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 

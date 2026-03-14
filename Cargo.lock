@@ -1537,6 +1537,7 @@ dependencies = [
 name = "nostr-mcp-types"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "nostr",
  "schemars",
  "serde",
  "serde_json",

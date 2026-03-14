@@ -1,9 +1,10 @@
 use crate::error::CoreError;
-use crate::publish::{SendResult, publish_event_builder};
+use crate::publish::publish_event_builder;
 use nostr_mcp_types::groups::{
     CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
     JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs,
 };
+use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
 
 pub async fn put_user(client: &Client, args: PutUserArgs) -> Result<SendResult, CoreError> {

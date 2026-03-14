@@ -1,29 +1,12 @@
 use crate::error::CoreError;
 use nostr::nips::nip05::{Nip05Address, Nip05Profile, verify_from_raw_json};
 use nostr::prelude::{FromBech32, PublicKey, ToBech32};
-use nostr_mcp_types::nip05::{Nip05ResolveArgs, Nip05VerifyArgs};
+use nostr_mcp_types::nip05::{
+    Nip05ResolveArgs, Nip05ResolveResult, Nip05VerifyArgs, Nip05VerifyResult,
+};
 use reqwest::Client;
 use reqwest::header::ACCEPT;
-use serde::Serialize;
 use std::time::Duration;
-
-#[derive(Debug, Serialize)]
-pub struct Nip05ResolveResult {
-    pub identifier: String,
-    pub url: String,
-    pub pubkey_hex: String,
-    pub pubkey_npub: String,
-    pub relays: Vec<String>,
-    pub nip46_relays: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip05VerifyResult {
-    pub identifier: String,
-    pub url: String,
-    pub pubkey_hex: String,
-    pub valid: bool,
-}
 
 pub async fn resolve_nip05(args: Nip05ResolveArgs) -> Result<Nip05ResolveResult, CoreError> {
     let address = Nip05Address::parse(args.identifier.trim())

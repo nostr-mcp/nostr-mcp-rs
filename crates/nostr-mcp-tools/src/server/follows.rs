@@ -1,9 +1,12 @@
 use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::follows::{PublishFollowsResult, fetch_follows, publish_follows};
+use nostr_mcp_core::follows::{fetch_follows, publish_follows};
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_types::common::EmptyArgs;
-use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
+use nostr_mcp_types::follows::{
+    AddFollowArgs, FollowsLookupResult, FollowsMutationResult, PublishFollowsResult,
+    RemoveFollowArgs, SetFollowsArgs,
+};
 use nostr_mcp_types::settings::FollowEntry;
 use nostr_sdk::prelude::*;
 use rmcp::{
@@ -104,10 +107,11 @@ impl NostrMcpServer {
             .map(|settings| settings.follows)
             .unwrap_or_default();
 
-        let content = Content::json(serde_json::json!({
-            "pubkey": active.public_key,
-            "follows": follows,
-            "count": follows.len()
+        let count = follows.len();
+        let content = Content::json(serde_json::json!(FollowsLookupResult {
+            pubkey: active.public_key,
+            follows,
+            count,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -136,10 +140,11 @@ impl NostrMcpServer {
         )
         .await?;
 
-        let content = Content::json(serde_json::json!({
-            "pubkey": active_client.active_pubkey.to_bech32().unwrap(),
-            "follows": follows,
-            "count": follows.len()
+        let count = follows.len();
+        let content = Content::json(serde_json::json!(FollowsLookupResult {
+            pubkey: active_client.active_pubkey.to_bech32().unwrap(),
+            follows,
+            count,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -191,10 +196,11 @@ impl NostrMcpServer {
             Self::unpublished_follow_result()
         };
 
-        let content = Content::json(serde_json::json!({
-            "follows": follows,
-            "count": follows.len(),
-            "result": result
+        let count = follows.len();
+        let content = Content::json(serde_json::json!(FollowsMutationResult {
+            follows,
+            count,
+            result,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -243,10 +249,11 @@ impl NostrMcpServer {
             Self::unpublished_follow_result()
         };
 
-        let content = Content::json(serde_json::json!({
-            "follows": follows,
-            "count": follows.len(),
-            "result": result
+        let count = follows.len();
+        let content = Content::json(serde_json::json!(FollowsMutationResult {
+            follows,
+            count,
+            result,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }

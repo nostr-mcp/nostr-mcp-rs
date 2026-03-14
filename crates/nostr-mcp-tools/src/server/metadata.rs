@@ -1,11 +1,13 @@
 use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
-use nostr_mcp_core::metadata::{
-    MetadataResult, args_to_profile, fetch_metadata, fetch_profile, publish_metadata,
-};
-use nostr_mcp_core::settings::{KeySettings, ProfileMetadata, SettingsStore};
+use nostr_mcp_core::metadata::{args_to_profile, fetch_metadata, fetch_profile, publish_metadata};
+use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_types::common::EmptyArgs;
-use nostr_mcp_types::metadata::{FetchMetadataArgs, ProfileGetArgs, SetMetadataArgs};
+use nostr_mcp_types::metadata::{
+    FetchMetadataArgs, FetchedMetadataResult, MetadataResult, ProfileGetArgs, SetMetadataArgs,
+    StoredMetadataResult,
+};
+use nostr_mcp_types::settings::ProfileMetadata;
 use nostr_sdk::prelude::*;
 use rmcp::{
     handler::server::wrapper::Parameters,
@@ -97,9 +99,9 @@ impl NostrMcpServer {
             .await
             .and_then(|settings| settings.metadata);
 
-        let content = Content::json(serde_json::json!({
-            "pubkey": active.public_key,
-            "metadata": metadata
+        let content = Content::json(serde_json::json!(StoredMetadataResult {
+            pubkey: active.public_key,
+            metadata,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -131,9 +133,9 @@ impl NostrMcpServer {
             .await
             .map_err(core_error)?;
 
-        let content = Content::json(serde_json::json!({
-            "pubkey": target_pubkey.to_bech32().unwrap(),
-            "metadata": metadata
+        let content = Content::json(serde_json::json!(FetchedMetadataResult {
+            pubkey: target_pubkey.to_bech32().unwrap(),
+            metadata,
         }))?;
         Ok(CallToolResult::success(vec![content]))
     }

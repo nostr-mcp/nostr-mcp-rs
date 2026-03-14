@@ -1,34 +1,10 @@
 use crate::error::CoreError;
 use nostr_mcp_types::publish::{
-    CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
-    PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs, PublishSignedEventArgs,
-    SignEventArgs,
+    CreateTextArgs, CreateTextResult, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs,
+    PostLongFormArgs, PostReactionArgs, PostRepostArgs, PostTextArgs, PostThreadArgs,
+    PublishSignedEventArgs, SendResult, SignEventArgs, SignEventResult,
 };
 use nostr_sdk::prelude::*;
-use serde::Serialize;
-use std::collections::HashMap;
-
-#[derive(Debug, Serialize)]
-pub struct SendResult {
-    pub id: String,
-    pub success: Vec<String>,
-    pub failed: HashMap<String, String>,
-    pub pubkey: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateTextResult {
-    pub event_id: String,
-    pub pubkey: String,
-    pub unsigned_event_json: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SignEventResult {
-    pub event_id: String,
-    pub pubkey: String,
-    pub event_json: String,
-}
 
 pub async fn publish_event_builder(
     client: &Client,

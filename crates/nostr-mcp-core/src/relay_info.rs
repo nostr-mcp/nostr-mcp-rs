@@ -2,18 +2,10 @@ use crate::error::CoreError;
 use nostr::JsonUtil;
 use nostr::nips::nip11::RelayInformationDocument;
 use nostr_mcp_types::relay_info::RelayInfoArgs;
+use nostr_mcp_types::relay_info::RelayInfoResult;
 use reqwest::Client;
 use reqwest::header::ACCEPT;
-use serde::Serialize;
 use std::time::Duration;
-
-#[derive(Debug, Serialize)]
-pub struct RelayInfoResult {
-    pub relay_url: String,
-    pub http_url: String,
-    pub status: u16,
-    pub document: RelayInformationDocument,
-}
 
 pub async fn fetch_relay_info(args: RelayInfoArgs) -> Result<RelayInfoResult, CoreError> {
     let http_url = normalize_relay_http_url(&args.relay_url)?;

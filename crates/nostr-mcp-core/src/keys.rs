@@ -1,35 +1,6 @@
 use crate::error::CoreError;
 use nostr::prelude::*;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct VerifyResult {
-    pub input: String,
-    pub key_type: KeyType,
-    pub valid: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_key_npub: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_key_hex: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum KeyType {
-    Npub,
-    Nsec,
-    Hex,
-    Invalid,
-}
-
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct DerivePublicResult {
-    pub public_key_npub: String,
-    pub public_key_hex: String,
-}
+use nostr_mcp_types::keys::{DerivePublicResult, KeyType, VerifyResult};
 
 pub fn verify_key(key: &str) -> VerifyResult {
     let key = key.trim();
@@ -156,8 +127,9 @@ pub fn derive_public(private_key: &str) -> Result<DerivePublicResult, CoreError>
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_public, verify_key, KeyType};
+    use super::{derive_public, verify_key};
     use nostr::prelude::*;
+    use nostr_mcp_types::keys::KeyType;
 
     #[test]
     fn verify_key_accepts_npub() {

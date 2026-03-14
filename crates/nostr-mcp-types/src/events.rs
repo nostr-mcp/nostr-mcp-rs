@@ -1,5 +1,5 @@
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -64,4 +64,20 @@ impl LongFormListArgs {
     pub fn timeout(&self) -> u64 {
         self.timeout_secs.unwrap_or(10)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct EventItem {
+    pub id: String,
+    pub kind: u16,
+    pub pubkey: String,
+    pub created_at: u64,
+    pub content: String,
+    pub tags: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct EventItemsResult {
+    pub items: Vec<EventItem>,
+    pub count: usize,
 }

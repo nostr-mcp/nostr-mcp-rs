@@ -1,25 +1,10 @@
 use crate::error::CoreError;
-use base64::engine::{general_purpose, Engine};
+use base64::engine::{Engine, general_purpose};
 use nostr::nips::nip44;
 use nostr::prelude::{FromBech32, Keys, PublicKey, SecretKey, ToBech32};
-use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct Nip44EncryptResult {
-    pub ciphertext: String,
-    pub version: u8,
-    pub peer_public_key_hex: String,
-    pub peer_public_key_npub: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Nip44DecryptResult {
-    pub plaintext: String,
-    pub version: u8,
-    pub peer_public_key_hex: String,
-    pub peer_public_key_npub: String,
-}
+use nostr_mcp_types::nip44::{
+    Nip44DecryptArgs, Nip44DecryptResult, Nip44EncryptArgs, Nip44EncryptResult,
+};
 
 pub fn encrypt_nip44(args: Nip44EncryptArgs) -> Result<Nip44EncryptResult, CoreError> {
     let secret_key = parse_secret_key(&args.private_key)?;

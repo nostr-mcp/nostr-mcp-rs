@@ -6,7 +6,9 @@ use nostr_mcp_core::relays::{
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::relay_info::RelayInfoArgs;
-use nostr_mcp_types::relays::{RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs};
+use nostr_mcp_types::relays::{
+    RelayListResult, RelayStatusResult, RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs,
+};
 use rmcp::{
     handler::server::wrapper::Parameters,
     model::{CallToolResult, Content, ErrorData},
@@ -66,7 +68,7 @@ impl NostrMcpServer {
         let rows = list_relays(&active_client.client)
             .await
             .map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
+        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
@@ -86,7 +88,7 @@ impl NostrMcpServer {
         let rows = list_relays(&active_client.client)
             .await
             .map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
+        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
@@ -117,7 +119,7 @@ impl NostrMcpServer {
         let rows = list_relays(&active_client.client)
             .await
             .map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "relays": rows }))?;
+        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
@@ -135,7 +137,10 @@ impl NostrMcpServer {
         let summary = status_summary(&active_client.client)
             .await
             .map_err(core_error)?;
-        let content = Content::json(serde_json::json!({ "summary": summary, "relays": rows }))?;
+        let content = Content::json(serde_json::json!(RelayStatusResult {
+            summary,
+            relays: rows,
+        }))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
