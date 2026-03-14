@@ -20,15 +20,15 @@ use nostr_mcp_core::secrets::KeyringSecretStore;
 use nostr_mcp_core::secrets::SecretStore;
 use nostr_mcp_core::settings::SettingsStore;
 use rmcp::{
+    ServerHandler, ServiceExt,
     handler::server::router::tool::ToolRouter,
     model::{ErrorData, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
     tool_handler, tool_router,
     transport::stdio,
-    ServerHandler, ServiceExt,
 };
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tracing::info;
 
 fn secret_store(runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
@@ -202,7 +202,7 @@ impl ServerHandler for NostrMcpServer {
 async fn wait_for_shutdown() {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{signal, SignalKind};
+        use tokio::signal::unix::{SignalKind, signal};
         let mut term = signal(SignalKind::terminate()).expect("signal");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
@@ -250,6 +250,7 @@ mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer};
     use rmcp::ServerHandler;
     use serde::Deserialize;
+    use serde_json::{Map, Value};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -285,6 +286,10 @@ mod tests {
         name: String,
         status: ToolStatus,
         summary: String,
+        #[serde(default)]
+        input_schema: Map<String, Value>,
+        #[serde(default)]
+        output_schema: Map<String, Value>,
     }
 
     fn load_tool_registry() -> ToolRegistry {
@@ -302,6 +307,16 @@ mod tests {
                 tool.status == ToolStatus::Stable && !HOST_LOCAL_TOOLS.contains(&tool.name.as_str())
             })
             .map(|tool| tool.name.clone())
+            .collect()
+    }
+
+    fn characterized_live_registry_tools(registry: &ToolRegistry) -> Vec<&ToolEntry> {
+        registry
+            .tools
+            .iter()
+            .filter(|tool| {
+                tool.status == ToolStatus::Stable && !HOST_LOCAL_TOOLS.contains(&tool.name.as_str())
+            })
             .collect()
     }
 
@@ -333,7 +348,11 @@ mod tests {
     #[test]
     fn tool_registry_matches_characterized_surface() {
         let registry = load_tool_registry();
-        let names: BTreeSet<String> = registry.tools.iter().map(|tool| tool.name.clone()).collect();
+        let names: BTreeSet<String> = registry
+            .tools
+            .iter()
+            .map(|tool| tool.name.clone())
+            .collect();
         let planned: BTreeSet<String> = registry
             .tools
             .iter()
@@ -346,7 +365,11 @@ mod tests {
             .filter(|tool| tool.status == ToolStatus::Stable)
             .count();
 
-        assert_eq!(names.len(), registry.tools.len(), "duplicate tool name in registry");
+        assert_eq!(
+            names.len(),
+            registry.tools.len(),
+            "duplicate tool name in registry"
+        );
         assert!(
             registry
                 .tools
@@ -389,14 +412,94 @@ mod tests {
     }
 
     #[test]
-    fn tool_schema_is_present() {
+    fn stable_registry_tools_define_input_and_output_schemas() {
+        let registry = load_tool_registry();
+        let stable_tools = characterized_live_registry_tools(&registry);
+        let missing_input_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| tool.input_schema.is_empty())
+            .map(|tool| tool.name.clone())
+            .collect();
+        let missing_output_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| tool.output_schema.is_empty())
+            .map(|tool| tool.name.clone())
+            .collect();
+
+        assert!(
+            missing_input_schema.is_empty(),
+            "stable registry tools missing input schema: {missing_input_schema:?}"
+        );
+        assert!(
+            missing_output_schema.is_empty(),
+            "stable registry tools missing output schema: {missing_output_schema:?}"
+        );
+    }
+
+    #[test]
+    fn stable_live_tool_routes_define_descriptions_and_input_schemas() {
         let server = NostrMcpServer::new();
-        let route = server
-            .tool_router
-            .map
-            .get("nostr_keys_generate")
-            .expect("tool");
-        assert!(!route.attr.input_schema.is_empty());
+        let registry = load_tool_registry();
+        let mut missing_description = Vec::new();
+        let mut missing_input_schema = Vec::new();
+
+        for tool_name in characterized_live_registry_tool_names(&registry) {
+            let route = server
+                .tool_router
+                .map
+                .get(tool_name.as_str())
+                .expect("characterized tool route");
+            if route
+                .attr
+                .description
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            {
+                missing_description.push(tool_name.clone());
+            }
+            if route.attr.input_schema.is_empty() {
+                missing_input_schema.push(tool_name.clone());
+            }
+        }
+
+        assert!(
+            missing_description.is_empty(),
+            "stable live routes missing descriptions: {missing_description:?}"
+        );
+        assert!(
+            missing_input_schema.is_empty(),
+            "stable live routes missing input schema: {missing_input_schema:?}"
+        );
+    }
+
+    #[test]
+    fn stable_live_tool_routes_do_not_yet_define_output_schemas() {
+        let server = NostrMcpServer::new();
+        let registry = load_tool_registry();
+        let characterized_tools: Vec<_> = characterized_live_registry_tool_names(&registry)
+            .into_iter()
+            .collect();
+        let missing_output_schema: Vec<_> = characterized_tools
+            .iter()
+            .filter_map(|tool_name| {
+                let route = server
+                    .tool_router
+                    .map
+                    .get(tool_name.as_str())
+                    .expect("characterized tool route");
+                route
+                    .attr
+                    .output_schema
+                    .as_ref()
+                    .is_none_or(|schema| schema.is_empty())
+                    .then(|| tool_name.clone())
+            })
+            .collect();
+
+        assert!(
+            missing_output_schema == characterized_tools,
+            "stable live route output schema posture changed: {missing_output_schema:?}"
+        );
     }
 
     #[test]
