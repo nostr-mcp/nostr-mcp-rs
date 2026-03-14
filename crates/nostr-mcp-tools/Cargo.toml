@@ -23,6 +23,7 @@ keyring = { workspace = true, optional = true }
 nostr = { workspace = true }
 nostr-mcp-core = { workspace = true }
 nostr-mcp-policy = { workspace = true }
+nostr-mcp-server = { workspace = true }
 nostr-mcp-types = { workspace = true }
 nostr-sdk = { workspace = true }
 rand = { workspace = true }

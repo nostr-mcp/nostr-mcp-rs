@@ -24,6 +24,7 @@ use nostr_mcp_policy::{
     AuthoringAction, CapabilityScope, IdentityClass, PolicyDecision, PolicyDecisionEffect,
     PolicyRequest, SignerBackend, SignerMethod, SignerPolicy,
 };
+use nostr_mcp_server::NostrMcpServerCatalog;
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::router::tool::ToolRouter,
@@ -342,10 +343,7 @@ impl ServerHandler for NostrMcpServer {
             protocol_version: ProtocolVersion::V_2024_11_05,
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "Tools: nostr_keys_generate, nostr_keys_import, nostr_keys_export, nostr_keys_verify, nostr_keys_derive_public, nostr_keys_remove, nostr_keys_list, nostr_keys_set_active, nostr_keys_get_active, nostr_keys_rename_label, nostr_relays_set, nostr_relays_connect, nostr_relays_disconnect, nostr_relays_status, nostr_relays_get_info, nostr_nip05_resolve, nostr_nip05_verify, nostr_nip44_encrypt, nostr_nip44_decrypt, nostr_handlers_recommend, nostr_handlers_register, nostr_badges_define, nostr_badges_award, nostr_badges_set_profile, nostr_events_parse_emojis, nostr_events_list, nostr_events_list_long_form, nostr_events_parse_refs, nostr_events_query, nostr_events_search, nostr_events_create_text, nostr_events_sign, nostr_events_post_text, nostr_events_post_thread, nostr_events_post_long_form, nostr_events_post_anonymous, nostr_events_repost, nostr_events_delete, nostr_events_post_group_chat, nostr_events_post_reaction, nostr_events_publish_signed, nostr_events_post_reply, nostr_events_post_comment, nostr_events_create_poll, nostr_events_vote_poll, nostr_events_get_poll_results, nostr_groups_put_user, nostr_groups_remove_user, nostr_groups_edit_metadata, nostr_groups_delete_event, nostr_groups_create_group, nostr_groups_delete_group, nostr_groups_create_invite, nostr_groups_join, nostr_groups_leave, nostr_metadata_set, nostr_metadata_get, nostr_metadata_fetch, nostr_profiles_get, nostr_follows_set, nostr_follows_get, nostr_follows_fetch, nostr_follows_add, nostr_follows_remove"
-                    .to_string(),
-            ),
+            instructions: Some(NostrMcpServerCatalog::generated().instructions()),
         }
     }
 }

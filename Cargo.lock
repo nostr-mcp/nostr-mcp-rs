@@ -1528,6 +1528,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nostr-mcp-server"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "nostr-mcp-types",
+]
+
+[[package]]
 name = "nostr-mcp-tools"
 version = "0.1.0-alpha.1"
 dependencies = [
@@ -1541,6 +1548,7 @@ dependencies = [
  "nostr",
  "nostr-mcp-core",
  "nostr-mcp-policy",
+ "nostr-mcp-server",
  "nostr-mcp-types",
  "nostr-sdk",
  "rand 0.8.5",
