@@ -250,19 +250,41 @@ mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer};
     use rmcp::ServerHandler;
     use serde::Deserialize;
+    use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::tempdir;
+
+    const CHARACTERIZED_STABLE_TOOL_COUNT: usize = 66;
+    const CHARACTERIZED_GENERIC_STABLE_TOOL_COUNT: usize = 64;
+    const CHARACTERIZED_PLANNED_TOOLS: [&str; 7] = [
+        "nostr_nip19_convert",
+        "nostr_nip19_analyze",
+        "nostr_zaps_get_received",
+        "nostr_zaps_get_sent",
+        "nostr_zaps_get_all",
+        "nostr_zaps_prepare_anonymous",
+        "nostr_zaps_validate_receipt",
+    ];
+    const HOST_LOCAL_TOOLS: [&str; 2] = ["nostr_config_dir_get", "nostr_config_dir_set"];
 
     #[derive(Deserialize)]
     struct ToolRegistry {
         tools: Vec<ToolEntry>,
     }
 
+    #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "lowercase")]
+    enum ToolStatus {
+        Stable,
+        Planned,
+    }
+
     #[derive(Deserialize)]
     struct ToolEntry {
         name: String,
-        status: String,
+        status: ToolStatus,
+        summary: String,
     }
 
     fn load_tool_registry() -> ToolRegistry {
@@ -272,32 +294,98 @@ mod tests {
         serde_json::from_str(&data).expect("parse tools registry")
     }
 
-    fn is_generic_tool(tool: &ToolEntry) -> bool {
-        tool.status == "stable"
-            && !matches!(
-                tool.name.as_str(),
-                "nostr_config_dir_get" | "nostr_config_dir_set"
-            )
+    fn characterized_live_registry_tool_names(registry: &ToolRegistry) -> BTreeSet<String> {
+        registry
+            .tools
+            .iter()
+            .filter(|tool| {
+                tool.status == ToolStatus::Stable && !HOST_LOCAL_TOOLS.contains(&tool.name.as_str())
+            })
+            .map(|tool| tool.name.clone())
+            .collect()
+    }
+
+    fn live_tool_names(server: &NostrMcpServer) -> BTreeSet<String> {
+        server
+            .tool_router
+            .map
+            .keys()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    fn advertised_tool_names(server: &NostrMcpServer) -> BTreeSet<String> {
+        let info = ServerHandler::get_info(server);
+        let instructions = info.instructions.expect("server instructions");
+        let raw = instructions
+            .strip_prefix("Tools: ")
+            .expect("tools prefix in instructions");
+        let advertised: Vec<String> = raw.split(',').map(|item| item.trim().to_string()).collect();
+        let unique: BTreeSet<String> = advertised.iter().cloned().collect();
+        assert_eq!(
+            unique.len(),
+            advertised.len(),
+            "duplicate tool name in server instructions"
+        );
+        unique
     }
 
     #[test]
-    fn tool_router_registers_core_tools() {
+    fn tool_registry_matches_characterized_surface() {
+        let registry = load_tool_registry();
+        let names: BTreeSet<String> = registry.tools.iter().map(|tool| tool.name.clone()).collect();
+        let planned: BTreeSet<String> = registry
+            .tools
+            .iter()
+            .filter(|tool| tool.status == ToolStatus::Planned)
+            .map(|tool| tool.name.clone())
+            .collect();
+        let stable_count = registry
+            .tools
+            .iter()
+            .filter(|tool| tool.status == ToolStatus::Stable)
+            .count();
+
+        assert_eq!(names.len(), registry.tools.len(), "duplicate tool name in registry");
+        assert!(
+            registry
+                .tools
+                .iter()
+                .all(|tool| !tool.summary.trim().is_empty()),
+            "registry tool summary must not be empty"
+        );
+        assert_eq!(stable_count, CHARACTERIZED_STABLE_TOOL_COUNT);
+        assert_eq!(
+            characterized_live_registry_tool_names(&registry).len(),
+            CHARACTERIZED_GENERIC_STABLE_TOOL_COUNT
+        );
+        assert_eq!(
+            planned,
+            CHARACTERIZED_PLANNED_TOOLS
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+    }
+
+    #[test]
+    fn live_tool_router_matches_characterized_registry_surface() {
         let server = NostrMcpServer::new();
         let registry = load_tool_registry();
-        for tool in registry.tools.into_iter().filter(is_generic_tool) {
-            assert!(
-                server.tool_router.has_route(&tool.name),
-                "missing tool route: {}",
-                tool.name
-            );
-        }
+        assert_eq!(
+            live_tool_names(&server),
+            characterized_live_registry_tool_names(&registry)
+        );
     }
 
     #[test]
-    fn tool_router_excludes_host_local_runtime_tools() {
+    fn server_instructions_match_characterized_registry_surface() {
         let server = NostrMcpServer::new();
-        assert!(!server.tool_router.has_route("nostr_config_dir_get"));
-        assert!(!server.tool_router.has_route("nostr_config_dir_set"));
+        let registry = load_tool_registry();
+        assert_eq!(
+            advertised_tool_names(&server),
+            characterized_live_registry_tool_names(&registry)
+        );
     }
 
     #[test]
