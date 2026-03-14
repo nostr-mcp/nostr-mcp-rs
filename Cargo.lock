@@ -1531,6 +1531,7 @@ dependencies = [
  "anyhow",
  "dirs",
  "nostr-mcp-core",
+ "nostr-mcp-policy",
  "nostr-mcp-types",
  "nostr-sdk",
  "rmcp",

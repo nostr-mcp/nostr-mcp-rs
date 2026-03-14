@@ -2,6 +2,7 @@ use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::client::ActiveClient;
 use nostr_mcp_core::nip58::{post_badge_award, post_badge_definition, post_profile_badges};
 use nostr_mcp_core::nip89::{post_handler_info, post_recommendation};
+use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::nip58::{
     Nip58BadgeAwardArgs, Nip58BadgeDefinitionArgs, Nip58ProfileBadgesArgs,
 };
@@ -27,6 +28,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip89RecommendArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(31989),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.protocol_publishing_client().await?;
         let result = post_recommendation(&active_client.client, args)
             .await
@@ -42,6 +51,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip89HandlerInfoArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(31990),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.protocol_publishing_client().await?;
         let result = post_handler_info(&active_client.client, args)
             .await
@@ -57,6 +74,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58BadgeDefinitionArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(30009),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.protocol_publishing_client().await?;
         let result = post_badge_definition(&active_client.client, args)
             .await
@@ -72,6 +97,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58BadgeAwardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(8),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.protocol_publishing_client().await?;
         let result = post_badge_award(&active_client.client, args)
             .await
@@ -87,6 +120,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip58ProfileBadgesArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(30008),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.protocol_publishing_client().await?;
         let result = post_profile_badges(&active_client.client, args)
             .await

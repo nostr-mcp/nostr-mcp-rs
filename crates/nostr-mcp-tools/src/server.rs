@@ -19,6 +19,10 @@ use nostr_mcp_core::secrets::InMemorySecretStore;
 use nostr_mcp_core::secrets::KeyringSecretStore;
 use nostr_mcp_core::secrets::SecretStore;
 use nostr_mcp_core::settings::SettingsStore;
+use nostr_mcp_policy::{
+    AuthoringAction, CapabilityScope, IdentityClass, PolicyDecision, PolicyDecisionEffect,
+    PolicyRequest, SignerBackend, SignerMethod, SignerPolicy,
+};
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::router::tool::ToolRouter,
@@ -71,6 +75,24 @@ fn invalid_params<E: ToString>(err: E) -> ErrorData {
     ErrorData::invalid_params(err.to_string(), None)
 }
 
+fn policy_reason_name(decision: &PolicyDecision) -> String {
+    serde_json::to_value(decision.reason)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "policy_violation".to_string())
+}
+
+fn policy_error(decision: PolicyDecision) -> ErrorData {
+    let reason = policy_reason_name(&decision);
+    let message = match decision.effect {
+        PolicyDecisionEffect::Allow => "policy allowed request".to_string(),
+        PolicyDecisionEffect::Deny => format!("policy denied request: {reason}"),
+        PolicyDecisionEffect::Escalate => format!("policy requires approval: {reason}"),
+    };
+    let data = serde_json::to_value(&decision).ok();
+    ErrorData::invalid_request(message, data)
+}
+
 struct ServerStores {
     keystore: Arc<KeyStore>,
     settings_store: Arc<SettingsStore>,
@@ -119,6 +141,98 @@ impl NostrMcpServer {
     async fn initialize(&self) -> Result<(), CoreError> {
         self.context.stores().await?;
         Ok(())
+    }
+
+    fn configured_signer_backend(&self) -> SignerBackend {
+        self.context.runtime.signer_policy.signer_backend
+    }
+
+    fn required_signing_identity_class(&self) -> IdentityClass {
+        match self.configured_signer_backend() {
+            SignerBackend::Nip46Remote => IdentityClass::RemoteSignerSession,
+            SignerBackend::LocalTestOnly => IdentityClass::SignerBacked,
+        }
+    }
+
+    fn capability_request(&self, capability_scope: CapabilityScope) -> PolicyRequest {
+        PolicyRequest {
+            capability_scope: Some(capability_scope),
+            ..PolicyRequest::default()
+        }
+    }
+
+    fn raw_secret_request(
+        &self,
+        capability_scope: CapabilityScope,
+        signer_method: Option<SignerMethod>,
+    ) -> PolicyRequest {
+        PolicyRequest {
+            capability_scope: Some(capability_scope),
+            signer_method,
+            required_signer_backend: Some(SignerBackend::LocalTestOnly),
+            ..PolicyRequest::default()
+        }
+    }
+
+    fn authoring_request(
+        &self,
+        capability_scope: CapabilityScope,
+        authoring_action: AuthoringAction,
+        signer_method: Option<SignerMethod>,
+        event_kind: Option<u16>,
+        relay_targets: Option<Vec<String>>,
+    ) -> PolicyRequest {
+        let request = PolicyRequest {
+            capability_scope: Some(capability_scope),
+            signer_method,
+            authoring_action: Some(authoring_action),
+            event_kind,
+            required_identity_class: authoring_action
+                .requires_signer()
+                .then(|| self.required_signing_identity_class()),
+            required_signer_backend: authoring_action
+                .requires_signer()
+                .then(|| self.configured_signer_backend()),
+            ..PolicyRequest::default()
+        };
+        relay_targets.map_or(request.clone(), |targets| {
+            request.with_relay_targets(targets)
+        })
+    }
+
+    async fn effective_signer_policy(&self) -> Result<SignerPolicy, ErrorData> {
+        let mut policy = self.context.runtime.signer_policy.clone();
+
+        if matches!(policy.signer_backend, SignerBackend::LocalTestOnly) {
+            let keystore = self.keystore().await?;
+            let active = keystore.get_active().await;
+            let has_secret = match active {
+                Some(active_key) => keystore
+                    .secrets()
+                    .get(&active_key.label)
+                    .map_err(core_error)?
+                    .is_some(),
+                None => false,
+            };
+            policy.identity_class = if has_secret {
+                IdentityClass::SignerBacked
+            } else {
+                IdentityClass::WatchOnly
+            };
+        }
+
+        Ok(policy)
+    }
+
+    async fn authorize_policy_request(&self, request: PolicyRequest) -> Result<(), ErrorData> {
+        let policy = self.effective_signer_policy().await?;
+        let decision = policy.evaluate_request(request);
+        match decision.effect {
+            PolicyDecisionEffect::Allow => Ok(()),
+            PolicyDecisionEffect::Deny | PolicyDecisionEffect::Escalate => {
+                Err(policy_error(decision))
+            }
+        }
     }
 
     async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
@@ -248,6 +362,10 @@ pub async fn start_stdio_server_with_runtime(
 #[cfg(test)]
 mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer};
+    use crate::runtime::default_runtime_signer_policy;
+    use nostr_mcp_policy::{
+        CapabilityScope, RelayTargetScope, SignerBackend, SignerPolicy, default_signer_policy,
+    };
     use nostr_mcp_types::common::EmptyArgs;
     use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
     use nostr_mcp_types::key_store::{
@@ -256,7 +374,7 @@ mod tests {
     use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
     use nostr_mcp_types::metadata::SetMetadataArgs;
     use nostr_mcp_types::nip30::Nip30ParseArgs;
-    use nostr_mcp_types::publish::{CreateTextArgs, SignEventArgs};
+    use nostr_mcp_types::publish::{CreateTextArgs, PostTextArgs, SignEventArgs};
     use nostr_mcp_types::references::ParseReferencesArgs;
     use nostr_mcp_types::registry::{
         ToolContract, ToolRegistry, ToolStatus, generated_tool_registry,
@@ -265,7 +383,7 @@ mod tests {
     use nostr_mcp_types::settings::FollowEntry;
     use rmcp::ServerHandler;
     use rmcp::handler::server::wrapper::Parameters;
-    use rmcp::model::CallToolResult;
+    use rmcp::model::{CallToolResult, ErrorCode, ErrorData};
     use serde_json::Value;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -635,6 +753,24 @@ mod tests {
             dir.path().to_path_buf(),
         );
         (dir, NostrMcpServer::with_runtime(runtime))
+    }
+
+    fn server_with_policy(
+        name: &str,
+        config_root: PathBuf,
+        signer_policy: SignerPolicy,
+    ) -> NostrMcpServer {
+        let runtime = NostrMcpRuntime::new(
+            format!("policy-{name}"),
+            format!("policy-service-{name}"),
+            config_root,
+        )
+        .with_signer_policy(signer_policy);
+        NostrMcpServer::with_runtime(runtime)
+    }
+
+    fn policy_reason(err: &ErrorData) -> Option<&str> {
+        err.data.as_ref()?.get("reason")?.as_str()
     }
 
     async fn import_fixture_key(
@@ -1174,6 +1310,112 @@ mod tests {
             &[],
             &[("/event_json", "/sig", REDACTED_SIGNATURE)],
         );
+    }
+
+    #[tokio::test]
+    async fn policy_denies_unsigned_event_authoring_without_scope() {
+        let dir = tempdir().unwrap();
+        let seed_server = NostrMcpServer::with_runtime(NostrMcpRuntime::new(
+            "policy-seed-build-unsigned",
+            "policy-seed-build-unsigned",
+            dir.path().to_path_buf(),
+        ));
+        import_primary_watch_only_key(&seed_server).await;
+
+        let server = server_with_policy(
+            "build-unsigned-deny",
+            dir.path().to_path_buf(),
+            default_signer_policy(),
+        );
+        let err = server
+            .nostr_events_create_text(Parameters(CreateTextArgs {
+                content: "hello orchard".to_string(),
+                tags: None,
+                created_at: Some(1_700_000_000),
+            }))
+            .await
+            .expect_err("missing build unsigned scope should deny");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(policy_reason(&err), Some("missing_capability_scope"));
+    }
+
+    #[tokio::test]
+    async fn policy_denies_signing_when_active_identity_is_watch_only() {
+        let (_dir, server) = golden_server("policy-watch-only-sign-deny");
+        import_primary_watch_only_key(&server).await;
+
+        let unsigned = tool_result_json(
+            server
+                .nostr_events_create_text(Parameters(CreateTextArgs {
+                    content: "hello orchard".to_string(),
+                    tags: None,
+                    created_at: Some(1_700_000_000),
+                }))
+                .await
+                .expect("watch-only create text"),
+        );
+        let err = server
+            .nostr_events_sign(Parameters(SignEventArgs {
+                unsigned_event_json: unsigned["unsigned_event_json"]
+                    .as_str()
+                    .expect("unsigned event json")
+                    .to_string(),
+            }))
+            .await
+            .expect_err("watch-only active identity should deny signing");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(policy_reason(&err), Some("identity_class_mismatch"));
+    }
+
+    #[tokio::test]
+    async fn policy_denies_publish_to_relay_outside_allowlist() {
+        let dir = tempdir().unwrap();
+        let mut relay_policy = default_runtime_signer_policy();
+        relay_policy.relay_target_scope =
+            RelayTargetScope::allowlist(vec!["wss://relay.radroots.org".to_string()]);
+        let server =
+            server_with_policy("relay-target-deny", dir.path().to_path_buf(), relay_policy);
+        import_primary_signing_key(&server).await;
+
+        let err = server
+            .nostr_events_post_text(Parameters(PostTextArgs {
+                content: "hello orchard".to_string(),
+                pow: None,
+                to_relays: Some(vec!["wss://relay.example.com".to_string()]),
+            }))
+            .await
+            .expect_err("relay outside allowlist should deny publish");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(policy_reason(&err), Some("relay_target_out_of_scope"));
+    }
+
+    #[tokio::test]
+    async fn policy_denies_local_secret_import_when_runtime_backend_is_remote() {
+        let dir = tempdir().unwrap();
+        let mut remote_policy = default_signer_policy();
+        remote_policy.capability_scopes = vec![CapabilityScope::ManageIdentity];
+        remote_policy.signer_backend = SignerBackend::Nip46Remote;
+        let server = server_with_policy(
+            "local-secret-import-deny",
+            dir.path().to_path_buf(),
+            remote_policy,
+        );
+
+        let err = server
+            .nostr_keys_import(Parameters(ImportArgs {
+                label: FIXTURE_PRIMARY_LABEL.to_string(),
+                key_material: FIXTURE_PRIMARY_NSEC.to_string(),
+                make_active: Some(true),
+                persist_secret: Some(true),
+            }))
+            .await
+            .expect_err("remote backend should deny local secret import");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(policy_reason(&err), Some("signer_backend_mismatch"));
     }
 
     #[tokio::test]

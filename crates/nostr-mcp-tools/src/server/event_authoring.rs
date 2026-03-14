@@ -8,6 +8,7 @@ use nostr_mcp_core::publish::{
     sign_unsigned_event,
 };
 use nostr_mcp_core::replies::{post_comment, post_reply};
+use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::polls::{CreatePollArgs, VotePollArgs};
 use nostr_mcp_types::publish::{
     CreateTextArgs, DeleteEventsArgs, PostAnonymousArgs, PostGroupChatArgs, PostLongFormArgs,
@@ -21,6 +22,22 @@ use rmcp::{
     model::{CallToolResult, Content, ErrorData},
     tool, tool_router,
 };
+use serde_json::Value;
+
+fn event_kind_from_json(event_json: &str) -> Option<u16> {
+    serde_json::from_str::<Value>(event_json)
+        .ok()
+        .and_then(|value| value.get("kind").and_then(Value::as_u64))
+        .and_then(|kind| u16::try_from(kind).ok())
+}
+
+fn repost_kind_from_target_json(event_json: &str) -> Option<u16> {
+    match event_kind_from_json(event_json) {
+        Some(1) => Some(6),
+        Some(_) => Some(16),
+        None => None,
+    }
+}
 
 #[tool_router(router = event_authoring_tool_router, vis = "pub(crate)")]
 impl NostrMcpServer {
@@ -45,6 +62,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateTextArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::BuildUnsignedEvents,
+            AuthoringAction::BuildUnsigned,
+            None,
+            Some(1),
+            None,
+        ))
+        .await?;
         let pubkey = self.authoring_pubkey().await?;
         let result = create_text_event(pubkey, args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
@@ -58,6 +83,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SignEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::SignEvents,
+            AuthoringAction::Sign,
+            Some(SignerMethod::SignEvent),
+            event_kind_from_json(&args.unsigned_event_json),
+            None,
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let signer = active_client
             .client
@@ -79,6 +112,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostTextArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(1),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_text_note(&active_client.client, args)
             .await
@@ -94,6 +135,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostAnonymousArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(1),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_anonymous_note(&active_client.client, args)
             .await
@@ -109,6 +158,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostRepostArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            repost_kind_from_target_json(&args.event_json),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_repost(&active_client.client, args)
             .await
@@ -124,6 +181,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(5),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = delete_events(&active_client.client, args)
             .await
@@ -139,6 +204,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostThreadArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(11),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_thread(&active_client.client, args)
             .await
@@ -154,6 +227,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostLongFormArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(30023),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_long_form(&active_client.client, args)
             .await
@@ -169,6 +250,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostGroupChatArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_group_chat(&active_client.client, args)
             .await
@@ -184,6 +273,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostReactionArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(7),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_reaction(&active_client.client, args)
             .await
@@ -199,6 +296,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PublishSignedEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            event_kind_from_json(&args.event_json),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = publish_signed_event(&active_client.client, args)
             .await
@@ -214,6 +319,19 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostReplyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let reply_kind = if args.reply_to_kind == 1 {
+            Some(1)
+        } else {
+            Some(1111)
+        };
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            reply_kind,
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_reply(&active_client.client, args)
             .await
@@ -229,6 +347,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PostCommentArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(1111),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = post_comment(&active_client.client, args)
             .await
@@ -244,6 +370,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreatePollArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(1068),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = create_poll(&active_client.client, args)
             .await
@@ -259,6 +393,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<VotePollArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::PublishEvents,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(1018),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.authoring_client().await?;
         let result = vote_poll(&active_client.client, args)
             .await

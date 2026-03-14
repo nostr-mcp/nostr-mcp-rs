@@ -1,6 +1,7 @@
 use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::nip05::{resolve_nip05, verify_nip05};
 use nostr_mcp_core::nip44::{decrypt_nip44, encrypt_nip44};
+use nostr_mcp_policy::{CapabilityScope, SignerMethod};
 use nostr_mcp_types::nip05::{Nip05ResolveArgs, Nip05VerifyArgs};
 use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
 use rmcp::{
@@ -40,6 +41,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip44EncryptArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.raw_secret_request(
+            CapabilityScope::EncryptNip44,
+            Some(SignerMethod::Nip44Encrypt),
+        ))
+        .await?;
         let result = encrypt_nip44(args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -50,6 +56,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip44DecryptArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.raw_secret_request(
+            CapabilityScope::DecryptNip44,
+            Some(SignerMethod::Nip44Decrypt),
+        ))
+        .await?;
         let result = decrypt_nip44(args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))

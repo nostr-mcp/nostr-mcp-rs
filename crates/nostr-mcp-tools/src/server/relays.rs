@@ -4,6 +4,7 @@ use nostr_mcp_core::relays::{
     connect_relays, disconnect_relays, get_relay_urls, list_relays, set_relays, status_summary,
 };
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
+use nostr_mcp_policy::CapabilityScope;
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::relay_info::RelayInfoArgs;
 use nostr_mcp_types::relays::{
@@ -48,6 +49,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysSetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageRelays))
+            .await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
         let active_client = self
@@ -79,6 +82,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysConnectArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageRelays))
+            .await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
         let active_client = self.ensure_client_from(keystore, settings_store).await?;
@@ -99,6 +104,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelaysDisconnectArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageRelays))
+            .await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
         let active_client = self

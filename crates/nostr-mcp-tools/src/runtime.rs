@@ -1,5 +1,10 @@
 use std::path::PathBuf;
 
+use nostr_mcp_policy::{
+    AuthoringAction, CapabilityScope, EventKindScope, IdentityClass, RelayTargetScope,
+    SignerBackend, SignerMethod, SignerPolicy,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NostrMcpPaths {
     pub config_root: PathBuf,
@@ -24,6 +29,7 @@ pub struct NostrMcpRuntime {
     pub server_name: String,
     pub keyring_service: String,
     pub paths: NostrMcpPaths,
+    pub signer_policy: SignerPolicy,
 }
 
 impl NostrMcpRuntime {
@@ -36,6 +42,7 @@ impl NostrMcpRuntime {
             server_name: server_name.into(),
             keyring_service: keyring_service.into(),
             paths: NostrMcpPaths::from_root(config_root),
+            signer_policy: default_runtime_signer_policy(),
         }
     }
 
@@ -44,6 +51,16 @@ impl NostrMcpRuntime {
             server_name: self.server_name.clone(),
             keyring_service: self.keyring_service.clone(),
             paths: NostrMcpPaths::from_root(config_root),
+            signer_policy: self.signer_policy.clone(),
+        }
+    }
+
+    pub fn with_signer_policy(&self, signer_policy: SignerPolicy) -> Self {
+        Self {
+            server_name: self.server_name.clone(),
+            keyring_service: self.keyring_service.clone(),
+            paths: self.paths.clone(),
+            signer_policy,
         }
     }
 }
@@ -61,9 +78,48 @@ pub fn default_config_root() -> PathBuf {
         .join("nostr-mcp")
 }
 
+pub fn default_runtime_signer_policy() -> SignerPolicy {
+    SignerPolicy {
+        identity_class: IdentityClass::SignerBacked,
+        signer_backend: SignerBackend::LocalTestOnly,
+        capability_scopes: vec![
+            CapabilityScope::ManageIdentity,
+            CapabilityScope::ManageRelays,
+            CapabilityScope::ManageMetadata,
+            CapabilityScope::ManageFollows,
+            CapabilityScope::ModerateGroups,
+            CapabilityScope::BuildUnsignedEvents,
+            CapabilityScope::PreviewEvents,
+            CapabilityScope::SignEvents,
+            CapabilityScope::PublishEvents,
+            CapabilityScope::EncryptNip44,
+            CapabilityScope::DecryptNip44,
+        ],
+        signer_methods: vec![
+            SignerMethod::GetPublicKey,
+            SignerMethod::SignEvent,
+            SignerMethod::Nip44Encrypt,
+            SignerMethod::Nip44Decrypt,
+            SignerMethod::SwitchRelays,
+        ],
+        authoring_actions: vec![
+            AuthoringAction::BuildUnsigned,
+            AuthoringAction::Preview,
+            AuthoringAction::Sign,
+            AuthoringAction::Publish,
+        ],
+        event_kind_scope: EventKindScope::Any,
+        relay_target_scope: RelayTargetScope::Any,
+        ..SignerPolicy::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{default_config_root, NostrMcpPaths, NostrMcpRuntime};
+    use super::{
+        NostrMcpPaths, NostrMcpRuntime, default_config_root, default_runtime_signer_policy,
+    };
+    use nostr_mcp_policy::default_signer_policy;
     use std::path::PathBuf;
 
     #[test]
@@ -75,10 +131,13 @@ mod tests {
             runtime.paths,
             NostrMcpPaths::from_root(default_config_root())
         );
-        assert!(runtime
-            .paths
-            .config_root
-            .ends_with(PathBuf::from(".config").join("nostr-mcp")));
+        assert_eq!(runtime.signer_policy, default_runtime_signer_policy());
+        assert!(
+            runtime
+                .paths
+                .config_root
+                .ends_with(PathBuf::from(".config").join("nostr-mcp"))
+        );
     }
 
     #[test]
@@ -89,6 +148,7 @@ mod tests {
         assert_eq!(updated.server_name, "host");
         assert_eq!(updated.keyring_service, "service");
         assert_eq!(updated.paths.config_root, PathBuf::from("/tmp/custom"));
+        assert_eq!(updated.signer_policy, runtime.signer_policy);
         assert_eq!(
             updated.paths.index_path,
             PathBuf::from("/tmp/custom/keys.enc")
@@ -101,5 +161,16 @@ mod tests {
             updated.paths.keystore_secret_path,
             PathBuf::from("/tmp/custom/keystore.secret")
         );
+    }
+
+    #[test]
+    fn runtime_can_override_signer_policy() {
+        let runtime = NostrMcpRuntime::default();
+        let strict = runtime.with_signer_policy(default_signer_policy());
+
+        assert_eq!(strict.server_name, runtime.server_name);
+        assert_eq!(strict.keyring_service, runtime.keyring_service);
+        assert_eq!(strict.paths, runtime.paths);
+        assert_eq!(strict.signer_policy, default_signer_policy());
     }
 }

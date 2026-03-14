@@ -1,5 +1,6 @@
 use super::{NostrMcpServer, core_error};
 use nostr_mcp_core::keys::{derive_public, verify_key};
+use nostr_mcp_policy::{CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::key_store::{
     ExportArgs, GenerateArgs, ImportArgs, KeyRemovalResult, KeysListResult, RemoveArgs,
@@ -19,6 +20,10 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<GenerateArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(
+            self.raw_secret_request(CapabilityScope::ManageIdentity, None),
+        )
+        .await?;
         let keystore = self.keystore().await?;
         let entry = keystore
             .generate(
@@ -40,6 +45,10 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ImportArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(
+            self.raw_secret_request(CapabilityScope::ManageIdentity, None),
+        )
+        .await?;
         let keystore = self.keystore().await?;
         let entry = keystore
             .import_secret(
@@ -60,6 +69,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageIdentity))
+            .await?;
         let keystore = self.keystore().await?;
         let removed = keystore.remove(args.label).await.map_err(core_error)?;
         self.reset_client().await?;
@@ -91,6 +102,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetActiveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageIdentity))
+            .await?;
         let keystore = self.keystore().await?;
         let entry = keystore.set_active(args.label).await.map_err(core_error)?;
         self.reset_client().await?;
@@ -114,6 +127,8 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RenameLabelArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.capability_request(CapabilityScope::ManageIdentity))
+            .await?;
         let keystore = self.keystore().await?;
         let source = match args.from {
             Some(label) => label,
@@ -139,6 +154,15 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ExportArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let request = if args.include_private {
+            self.raw_secret_request(
+                CapabilityScope::ManageIdentity,
+                Some(SignerMethod::GetPublicKey),
+            )
+        } else {
+            self.capability_request(CapabilityScope::ManageIdentity)
+        };
+        self.authorize_policy_request(request).await?;
         let keystore = self.keystore().await?;
         let result = keystore
             .export_key(args.label, args.format, args.include_private)
@@ -167,6 +191,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DerivePublicArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.raw_secret_request(
+            CapabilityScope::ManageIdentity,
+            Some(SignerMethod::GetPublicKey),
+        ))
+        .await?;
         let result = derive_public(&args.private_key).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))

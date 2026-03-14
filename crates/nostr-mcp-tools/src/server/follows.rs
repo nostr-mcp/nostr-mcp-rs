@@ -2,6 +2,7 @@ use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::follows::{fetch_follows, publish_follows};
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
+use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::follows::{
     AddFollowArgs, FollowsLookupResult, FollowsMutationResult, PublishFollowsResult,
@@ -60,6 +61,18 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetFollowsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let request = if args.publish.unwrap_or(true) {
+            self.authoring_request(
+                CapabilityScope::ManageFollows,
+                AuthoringAction::Publish,
+                Some(SignerMethod::SignEvent),
+                Some(3),
+                None,
+            )
+        } else {
+            self.capability_request(CapabilityScope::ManageFollows)
+        };
+        self.authorize_policy_request(request).await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
 
@@ -156,6 +169,18 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<AddFollowArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let request = if args.publish.unwrap_or(true) {
+            self.authoring_request(
+                CapabilityScope::ManageFollows,
+                AuthoringAction::Publish,
+                Some(SignerMethod::SignEvent),
+                Some(3),
+                None,
+            )
+        } else {
+            self.capability_request(CapabilityScope::ManageFollows)
+        };
+        self.authorize_policy_request(request).await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
 
@@ -212,6 +237,18 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveFollowArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let request = if args.publish.unwrap_or(true) {
+            self.authoring_request(
+                CapabilityScope::ManageFollows,
+                AuthoringAction::Publish,
+                Some(SignerMethod::SignEvent),
+                Some(3),
+                None,
+            )
+        } else {
+            self.capability_request(CapabilityScope::ManageFollows)
+        };
+        self.authorize_policy_request(request).await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
 

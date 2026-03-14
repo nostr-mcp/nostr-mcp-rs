@@ -4,6 +4,7 @@ use nostr_mcp_core::groups::{
     create_group, create_invite, delete_group, delete_group_event, edit_group_metadata, join_group,
     leave_group, put_user, remove_user,
 };
+use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::groups::{
     CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
     JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs,
@@ -29,6 +30,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<PutUserArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9000),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = put_user(&active_client.client, args)
             .await
@@ -44,6 +53,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RemoveUserArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9001),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = remove_user(&active_client.client, args)
             .await
@@ -59,6 +76,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<EditGroupMetadataArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9002),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = edit_group_metadata(&active_client.client, args)
             .await
@@ -74,6 +99,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9005),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = delete_group_event(&active_client.client, args)
             .await
@@ -89,6 +122,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9007),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = create_group(&active_client.client, args)
             .await
@@ -104,6 +145,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<DeleteGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9008),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = delete_group(&active_client.client, args)
             .await
@@ -119,6 +168,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<CreateInviteArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9009),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = create_invite(&active_client.client, args)
             .await
@@ -134,6 +191,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<JoinGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9021),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = join_group(&active_client.client, args)
             .await
@@ -149,6 +214,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<LeaveGroupArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.authorize_policy_request(self.authoring_request(
+            CapabilityScope::ModerateGroups,
+            AuthoringAction::Publish,
+            Some(SignerMethod::SignEvent),
+            Some(9022),
+            args.to_relays.clone(),
+        ))
+        .await?;
         let active_client = self.group_client().await?;
         let result = leave_group(&active_client.client, args)
             .await

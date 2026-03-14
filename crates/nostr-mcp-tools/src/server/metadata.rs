@@ -2,6 +2,7 @@ use super::{NostrMcpServer, core_error, invalid_params};
 use nostr::nips::nip19::ToBech32;
 use nostr_mcp_core::metadata::{args_to_profile, fetch_metadata, fetch_profile, publish_metadata};
 use nostr_mcp_core::settings::{KeySettings, SettingsStore};
+use nostr_mcp_policy::{AuthoringAction, CapabilityScope, SignerMethod};
 use nostr_mcp_types::common::EmptyArgs;
 use nostr_mcp_types::metadata::{
     FetchMetadataArgs, FetchedMetadataResult, MetadataResult, ProfileGetArgs, SetMetadataArgs,
@@ -50,6 +51,18 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<SetMetadataArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let request = if args.publish.unwrap_or(true) {
+            self.authoring_request(
+                CapabilityScope::ManageMetadata,
+                AuthoringAction::Publish,
+                Some(SignerMethod::SignEvent),
+                Some(0),
+                None,
+            )
+        } else {
+            self.capability_request(CapabilityScope::ManageMetadata)
+        };
+        self.authorize_policy_request(request).await?;
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
 
