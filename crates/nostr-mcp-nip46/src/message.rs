@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::connect::Nip46ConnectRequest;
 use crate::error::Nip46Error;
+use crate::methods::{Nip46GetPublicKeyRequest, Nip46SwitchRelaysRequest};
 use crate::permission::Nip46Method;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -45,24 +46,36 @@ impl FromStr for Nip46RequestId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Nip46Request {
     Connect(Nip46ConnectRequest),
+    GetPublicKey(Nip46GetPublicKeyRequest),
+    SwitchRelays(Nip46SwitchRelaysRequest),
 }
 
 impl Nip46Request {
     pub fn method(&self) -> Nip46Method {
         match self {
             Self::Connect(_) => Nip46Method::Connect,
+            Self::GetPublicKey(_) => Nip46Method::GetPublicKey,
+            Self::SwitchRelays(_) => Nip46Method::SwitchRelays,
         }
     }
 
     pub fn params(&self) -> Vec<String> {
         match self {
             Self::Connect(request) => request.params(),
+            Self::GetPublicKey(request) => request.params(),
+            Self::SwitchRelays(request) => request.params(),
         }
     }
 
     pub fn from_message(method: Nip46Method, params: Vec<String>) -> Result<Self, Nip46Error> {
         match method {
             Nip46Method::Connect => Ok(Self::Connect(Nip46ConnectRequest::from_params(params)?)),
+            Nip46Method::GetPublicKey => Ok(Self::GetPublicKey(
+                Nip46GetPublicKeyRequest::from_params(params)?,
+            )),
+            Nip46Method::SwitchRelays => Ok(Self::SwitchRelays(
+                Nip46SwitchRelaysRequest::from_params(params)?,
+            )),
             other => Err(Nip46Error::unsupported_method(other.to_string())),
         }
     }
@@ -99,26 +112,22 @@ pub struct Nip46ResponseMessage {
 }
 
 impl Nip46ResponseMessage {
+    pub fn new(id: Nip46RequestId, result: Option<String>, error: Option<String>) -> Self {
+        Self { id, result, error }
+    }
+
     pub fn with_result<S>(id: Nip46RequestId, result: S) -> Self
     where
         S: Into<String>,
     {
-        Self {
-            id,
-            result: Some(result.into()),
-            error: None,
-        }
+        Self::new(id, Some(result.into()), None)
     }
 
     pub fn with_error<S>(id: Nip46RequestId, error: S) -> Self
     where
         S: Into<String>,
     {
-        Self {
-            id,
-            result: None,
-            error: Some(error.into()),
-        }
+        Self::new(id, None, Some(error.into()))
     }
 }
 
@@ -183,6 +192,7 @@ mod tests {
 
     use super::{Nip46Message, Nip46Request, Nip46RequestId, Nip46ResponseMessage};
     use crate::connect::Nip46ConnectRequest;
+    use crate::methods::Nip46GetPublicKeyRequest;
     use crate::permission::{Nip46Method, Nip46Permission, Nip46PermissionSet};
 
     const REMOTE_SIGNER_PUBKEY: &str =
@@ -229,5 +239,20 @@ mod tests {
     fn invalid_json_uses_message_error_surface() {
         let err = Nip46Message::from_json("{").unwrap_err();
         assert!(err.to_string().starts_with("invalid json: "));
+    }
+
+    #[test]
+    fn get_public_key_request_round_trips_through_json() {
+        let id = Nip46RequestId::new("3047714670").unwrap();
+        let message = Nip46Message::request(
+            id.clone(),
+            &Nip46Request::GetPublicKey(Nip46GetPublicKeyRequest),
+        );
+        let reparsed = Nip46Message::from_json(&message.as_json().unwrap()).unwrap();
+        assert_eq!(reparsed.id(), &id);
+        assert_eq!(
+            reparsed.into_request().unwrap().into_request().unwrap(),
+            Nip46Request::GetPublicKey(Nip46GetPublicKeyRequest)
+        );
     }
 }

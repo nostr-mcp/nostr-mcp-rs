@@ -40,8 +40,12 @@ pub enum Nip46Error {
     UnexpectedResponseId { expected: String, received: String },
     #[error("unexpected remote signer public key: expected `{expected}`, received `{received}`")]
     UnexpectedRemoteSignerPublicKey { expected: String, received: String },
-    #[error("unexpected connect result: expected `{expected}`, received `{received}`")]
-    UnexpectedConnectResult { expected: String, received: String },
+    #[error("unexpected response for `{method}`: expected `{expected}`, received `{received}`")]
+    UnexpectedResponseValue {
+        method: String,
+        expected: String,
+        received: String,
+    },
     #[error("invalid connect flow: {0}")]
     InvalidConnectFlow(String),
 }
@@ -106,6 +110,19 @@ impl Nip46Error {
         S: Into<String>,
     {
         Self::ResponseError(message.into())
+    }
+
+    pub fn unexpected_response_value<S, T, U>(method: S, expected: T, received: U) -> Self
+    where
+        S: Into<String>,
+        T: Into<String>,
+        U: Into<String>,
+    {
+        Self::UnexpectedResponseValue {
+            method: method.into(),
+            expected: expected.into(),
+            received: received.into(),
+        }
     }
 
     pub fn invalid_connect_flow<S>(message: S) -> Self

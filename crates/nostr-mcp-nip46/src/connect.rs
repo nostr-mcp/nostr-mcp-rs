@@ -87,10 +87,11 @@ impl Nip46ConnectResponse {
             Some(value) if value == "ack" => Nip46ConnectResult::Ack,
             Some(value) => Nip46ConnectResult::SecretEcho(value),
             None => {
-                return Err(Nip46Error::UnexpectedConnectResult {
-                    expected: "ack or secret echo".to_string(),
-                    received: "<none>".to_string(),
-                });
+                return Err(Nip46Error::unexpected_response_value(
+                    "connect",
+                    "ack or secret echo",
+                    "<none>",
+                ));
             }
         };
 

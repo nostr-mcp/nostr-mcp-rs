@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::connect::{Nip46ConnectRequest, Nip46ConnectResponse, Nip46ConnectResult};
 use crate::error::Nip46Error;
 use crate::message::{Nip46Message, Nip46Request, Nip46RequestId};
+use crate::methods::{
+    Nip46GetPublicKeyRequest, Nip46GetPublicKeyResponse, Nip46SwitchRelaysRequest,
+    Nip46SwitchRelaysResponse, Nip46SwitchRelaysResult,
+};
 use crate::permission::Nip46PermissionSet;
 use crate::uri::{Nip46ClientMetadata, Nip46ConnectUri};
 
@@ -94,6 +98,8 @@ pub struct Nip46Session {
     pub connection_mode: Nip46ConnectionMode,
     pub client_public_key: PublicKey,
     pub remote_signer_public_key: PublicKey,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_public_key: Option<PublicKey>,
     pub relays: Vec<RelayUrl>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secret: Option<String>,
@@ -194,17 +200,19 @@ impl Nip46PendingSession {
                         Nip46ConnectResult::Ack => {}
                         Nip46ConnectResult::SecretEcho(secret) if secret == expected_secret => {}
                         Nip46ConnectResult::SecretEcho(secret) => {
-                            return Err(Nip46Error::UnexpectedConnectResult {
-                                expected: format!("ack or `{expected_secret}`"),
-                                received: secret.clone(),
-                            });
+                            return Err(Nip46Error::unexpected_response_value(
+                                "connect",
+                                format!("ack or `{expected_secret}`"),
+                                secret.clone(),
+                            ));
                         }
                     }
                 } else if response.result != Nip46ConnectResult::Ack {
-                    return Err(Nip46Error::UnexpectedConnectResult {
-                        expected: "ack".to_string(),
-                        received: response.result.to_string(),
-                    });
+                    return Err(Nip46Error::unexpected_response_value(
+                        "connect",
+                        "ack",
+                        response.result.to_string(),
+                    ));
                 }
             }
             Nip46ConnectionMode::Client => {
@@ -214,10 +222,11 @@ impl Nip46PendingSession {
                 match &response.result {
                     Nip46ConnectResult::SecretEcho(secret) if secret == expected_secret => {}
                     other => {
-                        return Err(Nip46Error::UnexpectedConnectResult {
-                            expected: expected_secret.clone(),
-                            received: other.to_string(),
-                        });
+                        return Err(Nip46Error::unexpected_response_value(
+                            "connect",
+                            expected_secret.clone(),
+                            other.to_string(),
+                        ));
                     }
                 }
             }
@@ -227,6 +236,7 @@ impl Nip46PendingSession {
             connection_mode: self.connection_mode,
             client_public_key: self.client_public_key,
             remote_signer_public_key,
+            user_public_key: None,
             relays: self.relays.clone(),
             secret: self.expected_secret.clone(),
             requested_permissions: self.requested_permissions.clone(),
@@ -235,14 +245,78 @@ impl Nip46PendingSession {
     }
 }
 
+impl Nip46Session {
+    pub fn get_public_key_request(&self, request_id: Nip46RequestId) -> Nip46Message {
+        Nip46Message::request(
+            request_id,
+            &Nip46Request::GetPublicKey(Nip46GetPublicKeyRequest),
+        )
+    }
+
+    pub fn accept_get_public_key_response(
+        &self,
+        request_id: &Nip46RequestId,
+        message: Nip46Message,
+    ) -> Result<Self, Nip46Error> {
+        let response = Nip46GetPublicKeyResponse::from_response_message(message.into_response()?)?;
+        ensure_response_id(request_id, &response.id)?;
+
+        Ok(Self {
+            user_public_key: Some(response.user_public_key),
+            ..self.clone()
+        })
+    }
+
+    pub fn switch_relays_request(&self, request_id: Nip46RequestId) -> Nip46Message {
+        Nip46Message::request(
+            request_id,
+            &Nip46Request::SwitchRelays(Nip46SwitchRelaysRequest),
+        )
+    }
+
+    pub fn accept_switch_relays_response(
+        &self,
+        request_id: &Nip46RequestId,
+        message: Nip46Message,
+    ) -> Result<Self, Nip46Error> {
+        let response = Nip46SwitchRelaysResponse::from_response_message(message.into_response()?)?;
+        ensure_response_id(request_id, &response.id)?;
+
+        let relays = match response.result {
+            Nip46SwitchRelaysResult::Unchanged => self.relays.clone(),
+            Nip46SwitchRelaysResult::Updated(relays) => relays,
+        };
+
+        Ok(Self {
+            relays,
+            ..self.clone()
+        })
+    }
+}
+
+fn ensure_response_id(
+    expected_request_id: &Nip46RequestId,
+    response_id: &Nip46RequestId,
+) -> Result<(), Nip46Error> {
+    if expected_request_id != response_id {
+        return Err(Nip46Error::UnexpectedResponseId {
+            expected: expected_request_id.to_string(),
+            received: response_id.to_string(),
+        });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
 
     use nostr::{PublicKey, RelayUrl, Url};
 
-    use super::{Nip46ConnectionMode, Nip46PendingSession, Nip46SessionProfile};
+    use super::{Nip46ConnectionMode, Nip46PendingSession, Nip46Session, Nip46SessionProfile};
     use crate::message::{Nip46Message, Nip46RequestId, Nip46ResponseMessage};
+    use crate::methods::Nip46SwitchRelaysResult;
     use crate::permission::{Nip46Method, Nip46Permission, Nip46PermissionSet};
     use crate::uri::{Nip46ClientMetadata, Nip46ConnectUri};
 
@@ -327,7 +401,9 @@ mod tests {
 
         assert_eq!(pending.connection_mode, Nip46ConnectionMode::Bunker);
         let request = message.into_request().unwrap().into_request().unwrap();
-        let crate::message::Nip46Request::Connect(request) = request;
+        let crate::message::Nip46Request::Connect(request) = request else {
+            panic!("expected connect request");
+        };
         assert_eq!(
             request.params(),
             vec![
@@ -373,6 +449,7 @@ mod tests {
             session.remote_signer_public_key,
             PublicKey::from_str(REMOTE_SIGNER_PUBKEY).unwrap()
         );
+        assert_eq!(session.user_public_key, None);
     }
 
     #[test]
@@ -433,7 +510,7 @@ mod tests {
 
         assert_eq!(
             err.to_string(),
-            "unexpected connect result: expected `client-secret`, received `ack`"
+            "unexpected response for `connect`: expected `client-secret`, received `ack`"
         );
     }
 
@@ -470,5 +547,120 @@ mod tests {
                 REMOTE_SIGNER_PUBKEY, ALT_REMOTE_SIGNER_PUBKEY
             )
         );
+    }
+
+    #[test]
+    fn get_public_key_flow_learns_user_public_key() {
+        let session = Nip46Session {
+            connection_mode: Nip46ConnectionMode::Bunker,
+            client_public_key: PublicKey::from_str(CLIENT_PUBKEY).unwrap(),
+            remote_signer_public_key: PublicKey::from_str(REMOTE_SIGNER_PUBKEY).unwrap(),
+            user_public_key: None,
+            relays: vec![RelayUrl::parse("wss://relay.example.com").unwrap()],
+            secret: Some("bunker-secret".to_string()),
+            requested_permissions: Nip46PermissionSet::default(),
+            client_metadata: None,
+        };
+
+        let request_id = Nip46RequestId::new("3047714674").unwrap();
+        let request = session.get_public_key_request(request_id.clone());
+        let parsed_request = request.into_request().unwrap().into_request().unwrap();
+        assert_eq!(
+            parsed_request,
+            crate::message::Nip46Request::GetPublicKey(crate::methods::Nip46GetPublicKeyRequest)
+        );
+
+        let updated = session
+            .accept_get_public_key_response(
+                &request_id,
+                Nip46Message::response(Nip46ResponseMessage::with_result(
+                    request_id.clone(),
+                    ALT_REMOTE_SIGNER_PUBKEY,
+                )),
+            )
+            .unwrap();
+
+        assert_eq!(
+            updated.user_public_key,
+            Some(PublicKey::from_str(ALT_REMOTE_SIGNER_PUBKEY).unwrap())
+        );
+    }
+
+    #[test]
+    fn switch_relays_flow_updates_session_relays() {
+        let session = Nip46Session {
+            connection_mode: Nip46ConnectionMode::Bunker,
+            client_public_key: PublicKey::from_str(CLIENT_PUBKEY).unwrap(),
+            remote_signer_public_key: PublicKey::from_str(REMOTE_SIGNER_PUBKEY).unwrap(),
+            user_public_key: None,
+            relays: vec![RelayUrl::parse("wss://relay.example.com").unwrap()],
+            secret: None,
+            requested_permissions: Nip46PermissionSet::default(),
+            client_metadata: None,
+        };
+
+        let request_id = Nip46RequestId::new("3047714675").unwrap();
+        let request = session.switch_relays_request(request_id.clone());
+        let parsed_request = request.into_request().unwrap().into_request().unwrap();
+        assert_eq!(
+            parsed_request,
+            crate::message::Nip46Request::SwitchRelays(crate::methods::Nip46SwitchRelaysRequest)
+        );
+
+        let updated = session
+            .accept_switch_relays_response(
+                &request_id,
+                Nip46Message::response(
+                    crate::methods::Nip46SwitchRelaysResponse {
+                        id: request_id.clone(),
+                        result: Nip46SwitchRelaysResult::Updated(vec![
+                            RelayUrl::parse("wss://relay1.example.com").unwrap(),
+                            RelayUrl::parse("wss://relay2.example.com").unwrap(),
+                        ]),
+                    }
+                    .to_response_message()
+                    .unwrap(),
+                ),
+            )
+            .unwrap();
+
+        assert_eq!(
+            updated.relays,
+            vec![
+                RelayUrl::parse("wss://relay1.example.com").unwrap(),
+                RelayUrl::parse("wss://relay2.example.com").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn switch_relays_flow_keeps_existing_relays_when_result_is_null() {
+        let session = Nip46Session {
+            connection_mode: Nip46ConnectionMode::Client,
+            client_public_key: PublicKey::from_str(CLIENT_PUBKEY).unwrap(),
+            remote_signer_public_key: PublicKey::from_str(REMOTE_SIGNER_PUBKEY).unwrap(),
+            user_public_key: Some(PublicKey::from_str(ALT_REMOTE_SIGNER_PUBKEY).unwrap()),
+            relays: vec![RelayUrl::parse("wss://relay.example.com").unwrap()],
+            secret: Some("client-secret".to_string()),
+            requested_permissions: Nip46PermissionSet::from(vec![Nip46Permission::new(
+                Nip46Method::GetPublicKey,
+            )]),
+            client_metadata: Some(Nip46ClientMetadata {
+                name: Some("Agent".to_string()),
+                url: None,
+                image: None,
+            }),
+        };
+
+        let request_id = Nip46RequestId::new("3047714676").unwrap();
+        let updated = session
+            .accept_switch_relays_response(
+                &request_id,
+                Nip46Message::response(Nip46ResponseMessage::new(request_id.clone(), None, None)),
+            )
+            .unwrap();
+
+        assert_eq!(updated.relays, session.relays);
+        assert_eq!(updated.user_public_key, session.user_public_key);
     }
 }
