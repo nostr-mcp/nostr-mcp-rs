@@ -1492,6 +1492,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nostr-mcp"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "nostr-mcp-core",
+ "nostr-mcp-nip46",
+ "nostr-mcp-policy",
+ "nostr-mcp-server",
+ "nostr-mcp-tools",
+ "nostr-mcp-transport-stdio",
+ "nostr-mcp-types",
+]
+
+[[package]]
 name = "nostr-mcp-core"
 version = "0.1.0-alpha.1"
 dependencies = [

@@ -1,0 +1,45 @@
+[package]
+name = "nostr-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "Curated umbrella crate for nostr-mcp consumers"
+keywords = ["nostr", "mcp", "sdk"]
+
+[dependencies]
+nostr-mcp-types = { workspace = true, optional = true }
+nostr-mcp-policy = { workspace = true, optional = true }
+nostr-mcp-core = { workspace = true, optional = true }
+nostr-mcp-nip46 = { workspace = true, optional = true }
+nostr-mcp-server = { workspace = true, optional = true }
+nostr-mcp-tools = { workspace = true, optional = true }
+nostr-mcp-transport-stdio = { workspace = true, optional = true }
+
+[features]
+default = ["full"]
+types = ["dep:nostr-mcp-types"]
+policy = ["types", "dep:nostr-mcp-policy"]
+core = ["types", "policy", "dep:nostr-mcp-core"]
+nip46 = ["types", "policy", "core", "dep:nostr-mcp-nip46"]
+server = [
+    "types",
+    "policy",
+    "core",
+    "nip46",
+    "dep:nostr-mcp-server",
+    "dep:nostr-mcp-tools",
+]
+transport-stdio = ["server", "dep:nostr-mcp-transport-stdio"]
+full = ["transport-stdio"]
+keyring = [
+    "transport-stdio",
+    "nostr-mcp-server/keyring",
+    "nostr-mcp-tools/keyring",
+    "nostr-mcp-transport-stdio/keyring",
+]
