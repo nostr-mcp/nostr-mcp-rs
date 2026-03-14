@@ -1532,6 +1532,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nostr-mcp-types"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nostr-relay-pool"
 version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
