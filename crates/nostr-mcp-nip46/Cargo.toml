@@ -1,0 +1,21 @@
+[package]
+name = "nostr-mcp-nip46"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "NIP-46 connection and session types for nostr-mcp"
+keywords = ["nostr", "mcp", "nip46"]
+
+[dependencies]
+nostr = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
