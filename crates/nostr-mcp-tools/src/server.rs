@@ -248,11 +248,14 @@ pub async fn start_stdio_server_with_runtime(
 #[cfg(test)]
 mod tests {
     use super::{NostrMcpRuntime, NostrMcpServer};
-    use nostr_mcp_core::follows::SetFollowsArgs;
-    use nostr_mcp_core::key_store::{EmptyArgs, ExportArgs, ExportFormat, ImportArgs};
+    use nostr_mcp_core::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
+    use nostr_mcp_core::key_store::{
+        EmptyArgs, ExportArgs, ExportFormat, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+    };
     use nostr_mcp_core::keys::{DerivePublicArgs, VerifyArgs};
     use nostr_mcp_core::metadata::SetMetadataArgs;
     use nostr_mcp_core::nip30::Nip30ParseArgs;
+    use nostr_mcp_core::publish::{CreateTextArgs, SignEventArgs};
     use nostr_mcp_core::references::ParseReferencesArgs;
     use nostr_mcp_core::settings::FollowEntry;
     use rmcp::ServerHandler;
@@ -289,14 +292,31 @@ mod tests {
         "nostr_keys_verify",
         "nostr_metadata_get",
     ];
+    const GOLDEN_WRITE_TOOL_COUNT: usize = 10;
+    const GOLDEN_WRITE_TOOLS: [&str; GOLDEN_WRITE_TOOL_COUNT] = [
+        "nostr_events_create_text",
+        "nostr_events_sign",
+        "nostr_follows_add",
+        "nostr_follows_remove",
+        "nostr_follows_set",
+        "nostr_keys_import",
+        "nostr_keys_remove",
+        "nostr_keys_rename_label",
+        "nostr_keys_set_active",
+        "nostr_metadata_set",
+    ];
     const FIXTURE_PRIMARY_LABEL: &str = "primary";
+    const FIXTURE_SECONDARY_LABEL: &str = "secondary";
     const FIXTURE_PRIMARY_NSEC: &str =
         "nsec10allq0gjx7fddtzef0ax00mdps9t2kmtrldkyjfs8l5xruwvh2dq0lhhkp";
     const FIXTURE_PRIMARY_NPUB: &str =
         "npub1zutzeysacnf9rru6zqwmxd54mud0k44tst6l70ja5mhv8jjumytsd2x7nu";
+    const FIXTURE_SECONDARY_NPUB: &str =
+        "npub16sdj9zv4f8sl85e45vgq9n7nsgt5qphpvmf7vk8r5hhvmdjxx4es8rq74h";
     const FIXTURE_SECONDARY_PUBKEY_HEX: &str =
         "d41b22899549e1f3d335a31002cfd382174006e166d3e658e3a5eecdb6463573";
     const FIXTURE_VERIFY_INVALID_KEY: &str = "not-a-key";
+    const REDACTED_SIGNATURE: &str = "<redacted_signature>";
     const REDACTED_TIMESTAMP: &str = "<redacted_timestamp>";
 
     #[derive(Deserialize)]
@@ -350,9 +370,10 @@ mod tests {
             .collect()
     }
 
-    fn golden_fixture_path(name: &str) -> PathBuf {
+    fn golden_fixture_path(category: &str, name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/golden/read_only")
+            .join("tests/golden")
+            .join(category)
             .join(format!("{name}.json"))
     }
 
@@ -367,7 +388,38 @@ mod tests {
         *target = Value::String(replacement.to_string());
     }
 
+    fn redact_embedded_json_pointer(
+        value: &mut Value,
+        outer_pointer: &str,
+        inner_pointer: &str,
+        replacement: &str,
+    ) {
+        let raw = value
+            .pointer(outer_pointer)
+            .and_then(Value::as_str)
+            .expect("embedded json pointer");
+        let mut embedded: Value = serde_json::from_str(raw).expect("parse embedded json");
+        redact_json_pointer(&mut embedded, inner_pointer, replacement);
+        let target = value
+            .pointer_mut(outer_pointer)
+            .expect("embedded outer pointer");
+        *target = Value::String(embedded.to_string());
+    }
+
+    fn normalize_embedded_json_pointer(value: &mut Value, outer_pointer: &str) {
+        let raw = value
+            .pointer(outer_pointer)
+            .and_then(Value::as_str)
+            .expect("embedded json pointer");
+        let embedded: Value = serde_json::from_str(raw).expect("parse embedded json");
+        let target = value
+            .pointer_mut(outer_pointer)
+            .expect("embedded outer pointer");
+        *target = embedded;
+    }
+
     fn assert_tool_result_matches_golden(
+        category: &str,
         name: &str,
         result: CallToolResult,
         redactions: &[(&str, &str)],
@@ -376,10 +428,35 @@ mod tests {
         for (pointer, replacement) in redactions {
             redact_json_pointer(&mut actual, pointer, replacement);
         }
-        let path = golden_fixture_path(name);
+        let path = golden_fixture_path(category, name);
         let expected: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).expect("read golden fixture"))
                 .expect("parse golden fixture");
+        assert_eq!(actual, expected, "golden mismatch for {}", path.display());
+    }
+
+    fn assert_tool_result_matches_golden_with_embedded_redactions(
+        category: &str,
+        name: &str,
+        result: CallToolResult,
+        redactions: &[(&str, &str)],
+        embedded_redactions: &[(&str, &str, &str)],
+    ) {
+        let mut actual = tool_result_json(result);
+        for (pointer, replacement) in redactions {
+            redact_json_pointer(&mut actual, pointer, replacement);
+        }
+        for (outer_pointer, inner_pointer, replacement) in embedded_redactions {
+            redact_embedded_json_pointer(&mut actual, outer_pointer, inner_pointer, replacement);
+        }
+        let path = golden_fixture_path(category, name);
+        let mut expected: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read golden fixture"))
+                .expect("parse golden fixture");
+        for (outer_pointer, _, _) in embedded_redactions {
+            normalize_embedded_json_pointer(&mut actual, outer_pointer);
+            normalize_embedded_json_pointer(&mut expected, outer_pointer);
+        }
         assert_eq!(actual, expected, "golden mismatch for {}", path.display());
     }
 
@@ -393,16 +470,39 @@ mod tests {
         (dir, NostrMcpServer::with_runtime(runtime))
     }
 
-    async fn import_primary_watch_only_key(server: &NostrMcpServer) {
+    async fn import_fixture_key(
+        server: &NostrMcpServer,
+        label: &str,
+        key_material: &str,
+        persist_secret: bool,
+    ) -> CallToolResult {
         server
             .nostr_keys_import(Parameters(ImportArgs {
-                label: FIXTURE_PRIMARY_LABEL.to_string(),
-                key_material: FIXTURE_PRIMARY_NPUB.to_string(),
+                label: label.to_string(),
+                key_material: key_material.to_string(),
                 make_active: Some(true),
-                persist_secret: Some(false),
+                persist_secret: Some(persist_secret),
             }))
             .await
-            .expect("import watch-only primary key");
+            .expect("import fixture key")
+    }
+
+    async fn import_primary_watch_only_key(server: &NostrMcpServer) {
+        import_fixture_key(server, FIXTURE_PRIMARY_LABEL, FIXTURE_PRIMARY_NPUB, false).await;
+    }
+
+    async fn import_primary_signing_key(server: &NostrMcpServer) {
+        import_fixture_key(server, FIXTURE_PRIMARY_LABEL, FIXTURE_PRIMARY_NSEC, true).await;
+    }
+
+    async fn import_secondary_watch_only_key(server: &NostrMcpServer) {
+        import_fixture_key(
+            server,
+            FIXTURE_SECONDARY_LABEL,
+            FIXTURE_SECONDARY_NPUB,
+            false,
+        )
+        .await;
     }
 
     fn live_tool_names(server: &NostrMcpServer) -> BTreeSet<String> {
@@ -604,6 +704,20 @@ mod tests {
     }
 
     #[test]
+    fn golden_write_tool_cohort_is_characterized() {
+        let registry = load_tool_registry();
+        let live_tools = characterized_live_registry_tool_names(&registry);
+        let golden_tools: BTreeSet<_> =
+            GOLDEN_WRITE_TOOLS.into_iter().map(str::to_string).collect();
+
+        assert_eq!(golden_tools.len(), GOLDEN_WRITE_TOOL_COUNT);
+        assert!(
+            golden_tools.is_subset(&live_tools),
+            "golden write tool cohort drifted: {golden_tools:?}"
+        );
+    }
+
+    #[test]
     fn server_info_advertises_tools() {
         let server = NostrMcpServer::new();
         let info = ServerHandler::get_info(&server);
@@ -619,7 +733,7 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("keys_verify_valid_nsec", result, &[]);
+        assert_tool_result_matches_golden("read_only", "keys_verify_valid_nsec", result, &[]);
     }
 
     #[tokio::test]
@@ -631,7 +745,7 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("keys_verify_invalid", result, &[]);
+        assert_tool_result_matches_golden("read_only", "keys_verify_invalid", result, &[]);
     }
 
     #[tokio::test]
@@ -643,7 +757,7 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("keys_derive_public", result, &[]);
+        assert_tool_result_matches_golden("read_only", "keys_derive_public", result, &[]);
     }
 
     #[tokio::test]
@@ -658,7 +772,12 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("keys_export_watch_only_bech32", result, &[]);
+        assert_tool_result_matches_golden(
+            "read_only",
+            "keys_export_watch_only_bech32",
+            result,
+            &[],
+        );
     }
 
     #[tokio::test]
@@ -670,6 +789,7 @@ mod tests {
             .await
             .unwrap();
         assert_tool_result_matches_golden(
+            "read_only",
             "keys_get_active_watch_only",
             result,
             &[("/created_at", REDACTED_TIMESTAMP)],
@@ -685,6 +805,7 @@ mod tests {
             .await
             .unwrap();
         assert_tool_result_matches_golden(
+            "read_only",
             "keys_list_watch_only",
             result,
             &[("/keys/0/created_at", REDACTED_TIMESTAMP)],
@@ -714,7 +835,7 @@ mod tests {
             .nostr_metadata_get(Parameters(EmptyArgs::default()))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("metadata_get_local_settings", result, &[]);
+        assert_tool_result_matches_golden("read_only", "metadata_get_local_settings", result, &[]);
     }
 
     #[tokio::test]
@@ -744,7 +865,7 @@ mod tests {
             .nostr_follows_get(Parameters(EmptyArgs::default()))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("follows_get_local_settings", result, &[]);
+        assert_tool_result_matches_golden("read_only", "follows_get_local_settings", result, &[]);
     }
 
     #[tokio::test]
@@ -769,7 +890,7 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("events_parse_emojis", result, &[]);
+        assert_tool_result_matches_golden("read_only", "events_parse_emojis", result, &[]);
     }
 
     #[tokio::test]
@@ -783,7 +904,233 @@ mod tests {
             }))
             .await
             .unwrap();
-        assert_tool_result_matches_golden("events_parse_refs", result, &[]);
+        assert_tool_result_matches_golden("read_only", "events_parse_refs", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_keys_import_watch_only() {
+        let (_dir, server) = golden_server("keys-import-watch-only");
+        let result =
+            import_fixture_key(&server, FIXTURE_PRIMARY_LABEL, FIXTURE_PRIMARY_NPUB, false).await;
+        assert_tool_result_matches_golden(
+            "write_capable",
+            "keys_import_watch_only",
+            result,
+            &[("/created_at", REDACTED_TIMESTAMP)],
+        );
+    }
+
+    #[tokio::test]
+    async fn golden_keys_set_active() {
+        let (_dir, server) = golden_server("keys-set-active");
+        import_primary_watch_only_key(&server).await;
+        import_secondary_watch_only_key(&server).await;
+        let result = server
+            .nostr_keys_set_active(Parameters(SetActiveArgs {
+                label: FIXTURE_PRIMARY_LABEL.to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden(
+            "write_capable",
+            "keys_set_active",
+            result,
+            &[("/created_at", REDACTED_TIMESTAMP)],
+        );
+    }
+
+    #[tokio::test]
+    async fn golden_keys_rename_label() {
+        let (_dir, server) = golden_server("keys-rename-label");
+        import_primary_watch_only_key(&server).await;
+        let result = server
+            .nostr_keys_rename_label(Parameters(RenameLabelArgs {
+                from: None,
+                to: "orchard".to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden(
+            "write_capable",
+            "keys_rename_label",
+            result,
+            &[("/created_at", REDACTED_TIMESTAMP)],
+        );
+    }
+
+    #[tokio::test]
+    async fn golden_keys_remove() {
+        let (_dir, server) = golden_server("keys-remove");
+        import_primary_watch_only_key(&server).await;
+        let result = server
+            .nostr_keys_remove(Parameters(RemoveArgs {
+                label: FIXTURE_PRIMARY_LABEL.to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "keys_remove", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_metadata_set_local() {
+        let (_dir, server) = golden_server("metadata-set-local");
+        import_primary_watch_only_key(&server).await;
+        let result = server
+            .nostr_metadata_set(Parameters(SetMetadataArgs {
+                name: Some("alice".to_string()),
+                display_name: Some("Alice Example".to_string()),
+                about: Some("Grows citrus and coffee".to_string()),
+                picture: Some("https://example.com/alice.png".to_string()),
+                banner: None,
+                nip05: Some("alice@example.com".to_string()),
+                lud06: None,
+                lud16: Some("alice@ln.example.com".to_string()),
+                website: Some("https://example.com/alice".to_string()),
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "metadata_set_local", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_follows_set_local() {
+        let (_dir, server) = golden_server("follows-set-local");
+        import_primary_watch_only_key(&server).await;
+        let result = server
+            .nostr_follows_set(Parameters(SetFollowsArgs {
+                follows: vec![
+                    FollowEntry {
+                        pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                        relay_url: Some("wss://relay.example.com".to_string()),
+                        petname: Some("bob".to_string()),
+                    },
+                    FollowEntry {
+                        pubkey: "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+                            .to_string(),
+                        relay_url: None,
+                        petname: None,
+                    },
+                ],
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "follows_set_local", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_follows_add_local() {
+        let (_dir, server) = golden_server("follows-add-local");
+        import_primary_watch_only_key(&server).await;
+        server
+            .nostr_follows_set(Parameters(SetFollowsArgs {
+                follows: vec![FollowEntry {
+                    pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                    relay_url: Some("wss://relay.example.com".to_string()),
+                    petname: Some("bob".to_string()),
+                }],
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        let result = server
+            .nostr_follows_add(Parameters(AddFollowArgs {
+                pubkey: "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+                    .to_string(),
+                relay_url: None,
+                petname: Some("carol".to_string()),
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "follows_add_local", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_follows_remove_local() {
+        let (_dir, server) = golden_server("follows-remove-local");
+        import_primary_watch_only_key(&server).await;
+        server
+            .nostr_follows_set(Parameters(SetFollowsArgs {
+                follows: vec![
+                    FollowEntry {
+                        pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                        relay_url: Some("wss://relay.example.com".to_string()),
+                        petname: Some("bob".to_string()),
+                    },
+                    FollowEntry {
+                        pubkey: "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+                            .to_string(),
+                        relay_url: None,
+                        petname: Some("carol".to_string()),
+                    },
+                ],
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        let result = server
+            .nostr_follows_remove(Parameters(RemoveFollowArgs {
+                pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "follows_remove_local", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_events_create_text() {
+        let (_dir, server) = golden_server("events-create-text");
+        import_primary_watch_only_key(&server).await;
+        let result = server
+            .nostr_events_create_text(Parameters(CreateTextArgs {
+                content: "hello orchard".to_string(),
+                tags: Some(vec![
+                    vec!["t".to_string(), "orchard".to_string()],
+                    vec!["subject".to_string(), "field-note".to_string()],
+                ]),
+                created_at: Some(1_700_000_000),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden("write_capable", "events_create_text", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_events_sign() {
+        let (_dir, server) = golden_server("events-sign");
+        import_primary_signing_key(&server).await;
+        let unsigned = tool_result_json(
+            server
+                .nostr_events_create_text(Parameters(CreateTextArgs {
+                    content: "hello orchard".to_string(),
+                    tags: Some(vec![
+                        vec!["t".to_string(), "orchard".to_string()],
+                        vec!["subject".to_string(), "field-note".to_string()],
+                    ]),
+                    created_at: Some(1_700_000_000),
+                }))
+                .await
+                .unwrap(),
+        );
+        let result = server
+            .nostr_events_sign(Parameters(SignEventArgs {
+                unsigned_event_json: unsigned["unsigned_event_json"]
+                    .as_str()
+                    .expect("unsigned event json")
+                    .to_string(),
+            }))
+            .await
+            .unwrap();
+        assert_tool_result_matches_golden_with_embedded_redactions(
+            "write_capable",
+            "events_sign",
+            result,
+            &[],
+            &[("/event_json", "/sig", REDACTED_SIGNATURE)],
+        );
     }
 
     #[tokio::test]

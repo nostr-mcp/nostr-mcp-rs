@@ -1,0 +1,22 @@
+{
+  "follows": [
+    {
+      "pubkey": "d41b22899549e1f3d335a31002cfd382174006e166d3e658e3a5eecdb6463573",
+      "relay_url": "wss://relay.example.com",
+      "petname": "bob"
+    },
+    {
+      "pubkey": "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e",
+      "petname": "carol"
+    }
+  ],
+  "count": 2,
+  "result": {
+    "saved": true,
+    "published": false,
+    "event_id": null,
+    "pubkey": null,
+    "success_relays": [],
+    "failed_relays": {}
+  }
+}
