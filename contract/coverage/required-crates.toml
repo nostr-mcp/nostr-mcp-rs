@@ -1,5 +1,5 @@
 [required]
-crates = ["nostr-mcp-types"]
+crates = ["nostr-mcp-types", "nostr-mcp-policy"]
 
 [policy]
 mode = "staged"

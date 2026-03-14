@@ -289,6 +289,51 @@ mod tests {
     }
 
     #[test]
+    fn evaluate_request_denies_missing_signer_method() {
+        let mut policy = publish_policy();
+        policy
+            .signer_methods
+            .retain(|method| *method != SignerMethod::SignEvent);
+        let request = PolicyRequest {
+            capability_scope: Some(CapabilityScope::PublishEvents),
+            signer_method: Some(SignerMethod::SignEvent),
+            authoring_action: Some(AuthoringAction::Publish),
+            event_kind: Some(1),
+            required_identity_class: None,
+            required_signer_backend: None,
+            relay_targets: vec!["wss://relay.radroots.org".to_string()],
+        };
+        let decision = policy.evaluate_request(request);
+
+        assert_eq!(decision.effect, PolicyDecisionEffect::Deny);
+        assert_eq!(decision.reason, PolicyDecisionReason::MissingSignerMethod);
+    }
+
+    #[test]
+    fn evaluate_request_denies_missing_authoring_permission() {
+        let mut policy = publish_policy();
+        policy
+            .authoring_actions
+            .retain(|action| *action != AuthoringAction::Publish);
+        let request = PolicyRequest {
+            capability_scope: Some(CapabilityScope::PublishEvents),
+            signer_method: Some(SignerMethod::SignEvent),
+            authoring_action: Some(AuthoringAction::Publish),
+            event_kind: Some(1),
+            required_identity_class: None,
+            required_signer_backend: None,
+            relay_targets: vec!["wss://relay.radroots.org".to_string()],
+        };
+        let decision = policy.evaluate_request(request);
+
+        assert_eq!(decision.effect, PolicyDecisionEffect::Deny);
+        assert_eq!(
+            decision.reason,
+            PolicyDecisionReason::MissingAuthoringPermission
+        );
+    }
+
+    #[test]
     fn evaluate_request_escalates_manual_approval_action() {
         let mut policy = publish_policy();
         policy.manual_approval_actions = vec![AuthoringAction::Publish];
@@ -307,6 +352,30 @@ mod tests {
         assert_eq!(
             decision.reason,
             PolicyDecisionReason::ManualApprovalRequired
+        );
+    }
+
+    #[test]
+    fn evaluate_request_denies_authoring_action_when_capability_is_only_implied() {
+        let mut policy = publish_policy();
+        policy
+            .capability_scopes
+            .retain(|scope| *scope != CapabilityScope::PublishEvents);
+        let request = PolicyRequest {
+            capability_scope: None,
+            signer_method: Some(SignerMethod::SignEvent),
+            authoring_action: Some(AuthoringAction::Publish),
+            event_kind: Some(1),
+            required_identity_class: None,
+            required_signer_backend: None,
+            relay_targets: vec!["wss://relay.radroots.org".to_string()],
+        };
+        let decision = policy.evaluate_request(request);
+
+        assert_eq!(decision.effect, PolicyDecisionEffect::Deny);
+        assert_eq!(
+            decision.reason,
+            PolicyDecisionReason::MissingCapabilityScope
         );
     }
 
@@ -378,5 +447,43 @@ mod tests {
             backend_mismatch.reason,
             PolicyDecisionReason::SignerBackendMismatch
         );
+    }
+
+    #[test]
+    fn evaluate_request_allows_non_authoring_signer_requests_with_any_scopes() {
+        let mut policy = publish_policy();
+        policy.event_kind_scope = EventKindScope::Any;
+        policy.relay_target_scope = RelayTargetScope::Any;
+        let request = PolicyRequest {
+            capability_scope: Some(CapabilityScope::SignEvents),
+            signer_method: Some(SignerMethod::SignEvent),
+            authoring_action: None,
+            event_kind: Some(42),
+            required_identity_class: Some(IdentityClass::RemoteSignerSession),
+            required_signer_backend: Some(SignerBackend::Nip46Remote),
+            relay_targets: vec!["wss://relay.unauthorized.example".to_string()],
+        };
+        let decision = policy.evaluate_request(request);
+
+        assert_eq!(decision.effect, PolicyDecisionEffect::Allow);
+        assert_eq!(decision.reason, PolicyDecisionReason::ExplicitPolicyGrant);
+    }
+
+    #[test]
+    fn evaluate_request_allows_requests_without_optional_signer_method_kind_or_relays() {
+        let policy = publish_policy();
+        let request = PolicyRequest {
+            capability_scope: Some(CapabilityScope::PreviewEvents),
+            signer_method: None,
+            authoring_action: None,
+            event_kind: None,
+            required_identity_class: None,
+            required_signer_backend: None,
+            relay_targets: Vec::new(),
+        };
+        let decision = policy.evaluate_request(request);
+
+        assert_eq!(decision.effect, PolicyDecisionEffect::Allow);
+        assert_eq!(decision.reason, PolicyDecisionReason::ExplicitPolicyGrant);
     }
 }

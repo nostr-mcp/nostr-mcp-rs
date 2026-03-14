@@ -161,6 +161,11 @@ mod tests {
     }
 
     #[test]
+    fn event_kind_scope_any_exposes_unbounded_kinds() {
+        assert_eq!(EventKindScope::Any.kinds(), None);
+    }
+
+    #[test]
     fn relay_target_scope_allowlist_normalizes_relays() {
         let scope = RelayTargetScope::allowlist(vec![
             "wss://relay.example.com".to_string(),
@@ -179,5 +184,10 @@ mod tests {
                 .as_slice()
             )
         );
+    }
+
+    #[test]
+    fn relay_target_scope_any_exposes_unbounded_relays() {
+        assert_eq!(RelayTargetScope::Any.relays(), None);
     }
 }

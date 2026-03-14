@@ -16,7 +16,7 @@ order = 1
 
 [[rollout.crates]]
 name = "nostr-mcp-policy"
-status = "planned"
+status = "required"
 order = 2
 
 [[rollout.crates]]
