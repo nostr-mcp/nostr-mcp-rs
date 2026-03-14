@@ -1,3 +1,8 @@
 [alias]
+coverage-report = "run -p xtask -- coverage report"
+coverage-required-crates = "run -p xtask -- coverage required-crates"
+coverage-run-crate = "run -p xtask -- coverage run-crate"
+coverage-workspace-crates = "run -p xtask -- coverage workspace-crates"
 guard-registry-drift = "test -p nostr-mcp-tools server::tests::registry_surface_guard_blocks_drift -- --exact"
+guard-coverage-contract = "run -p xtask -- coverage validate-contract"
 generate-tool-registry = "run -p nostr-mcp-types --bin generate-tool-registry"

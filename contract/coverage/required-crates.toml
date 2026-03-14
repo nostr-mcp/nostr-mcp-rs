@@ -1,0 +1,6 @@
+[required]
+crates = []
+
+[policy]
+mode = "staged"
+threshold_profile = "strict_100"

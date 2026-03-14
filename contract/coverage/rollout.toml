@@ -1,0 +1,55 @@
+[policy]
+fail_under_exec_lines = 100.0
+fail_under_functions = 100.0
+fail_under_regions = 100.0
+fail_under_branches = 100.0
+require_branches = true
+
+[rollout]
+strategy = "crate-by-crate"
+entry_crate = "nostr-mcp-types"
+
+[[rollout.crates]]
+name = "nostr-mcp-types"
+status = "planned"
+order = 1
+
+[[rollout.crates]]
+name = "nostr-mcp-policy"
+status = "planned"
+order = 2
+
+[[rollout.crates]]
+name = "nostr-mcp-core"
+status = "planned"
+order = 3
+
+[[rollout.crates]]
+name = "nostr-mcp-nip46"
+status = "planned"
+order = 4
+
+[[rollout.crates]]
+name = "nostr-mcp-server"
+status = "planned"
+order = 5
+
+[[rollout.crates]]
+name = "nostr-mcp-tools"
+status = "planned"
+order = 6
+
+[[rollout.crates]]
+name = "nostr-mcp-transport-stdio"
+status = "planned"
+order = 7
+
+[[rollout.crates]]
+name = "nostr-mcp"
+status = "planned"
+order = 8
+
+[[rollout.crates]]
+name = "xtask"
+status = "planned"
+order = 9

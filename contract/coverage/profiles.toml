@@ -1,0 +1,4 @@
+[profiles.default]
+no_default_features = false
+features = []
+test_threads = 1
