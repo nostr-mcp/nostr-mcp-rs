@@ -5,7 +5,7 @@ use nostr_mcp_types::polls::{CreatePollArgs, PollResultOption, PollResults, Vote
 use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
+use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,18 +44,23 @@ pub async fn vote_poll(client: &Client, args: VotePollArgs) -> Result<SendResult
     publish_event_builder(client, builder, prepared.to_relays).await
 }
 
-pub fn get_poll_results<'a>(
-    client: &'a Client,
-    poll_event_id: &'a str,
+pub async fn get_poll_results(
+    client: &Client,
+    poll_event_id: &str,
     timeout_secs: u64,
-) -> impl Future<Output = Result<PollResults, CoreError>> + 'a {
-    get_poll_results_with_fetchers(
+) -> Result<PollResults, CoreError> {
+    let poll_id = parse_poll_event_id(poll_event_id)?;
+    let poll_events = fetch_poll_events(client, poll_id, timeout_secs).await?;
+
+    get_poll_results_after_poll_fetch(
+        client,
         poll_event_id,
         timeout_secs,
         Timestamp::now().as_secs(),
-        |poll_id, timeout_secs| fetch_poll_events(client, poll_id, timeout_secs),
-        |poll_id, timeout_secs| fetch_vote_events(client, poll_id, timeout_secs),
+        poll_id,
+        poll_events,
     )
+    .await
 }
 
 fn prepare_poll(args: CreatePollArgs) -> Result<PreparedPoll, CoreError> {
@@ -142,11 +147,7 @@ async fn fetch_poll_events(
     timeout_secs: u64,
 ) -> Result<Events, CoreError> {
     let poll_filter = Filter::new().id(poll_id).kind(Kind::from(1068)).limit(1);
-
-    client
-        .fetch_events(poll_filter, std::time::Duration::from_secs(timeout_secs))
-        .await
-        .map_err(|e| CoreError::operation(format!("fetch poll: {e}")))
+    strict_fetch_events(client, poll_filter, timeout_secs, "fetch poll").await
 }
 
 async fn fetch_vote_events(
@@ -157,11 +158,48 @@ async fn fetch_vote_events(
     let vote_filter = Filter::new()
         .kind(Kind::from(1018))
         .custom_tag(SingleLetterTag::lowercase(Alphabet::E), poll_id.to_hex());
+    strict_fetch_events(client, vote_filter, timeout_secs, "fetch votes").await
+}
 
-    client
-        .fetch_events(vote_filter, std::time::Duration::from_secs(timeout_secs))
-        .await
-        .map_err(|e| CoreError::operation(format!("fetch votes: {e}")))
+async fn strict_fetch_events(
+    client: &Client,
+    filter: Filter,
+    timeout_secs: u64,
+    context: &str,
+) -> Result<Events, CoreError> {
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+    let relays = client
+        .pool()
+        .relays_with_flag(RelayServiceFlags::READ, FlagCheck::All)
+        .await;
+    let mut events = Events::new(&filter);
+
+    if relays.is_empty() {
+        return Err(CoreError::operation(format!("{context}: no relays")));
+    }
+
+    for (relay_url, relay) in relays {
+        let relay_events = match relay
+            .fetch_events(filter.clone(), timeout, ReqExitPolicy::ExitOnEOSE)
+            .await
+        {
+            Ok(events) => events,
+            Err(error) => return Err(relay_fetch_error(context, &relay_url, error)),
+        };
+
+        for event in relay_events.into_iter() {
+            events.force_insert(event);
+        }
+    }
+
+    Ok(events)
+}
+
+fn relay_fetch_error<E>(context: &str, relay_url: &RelayUrl, error: E) -> CoreError
+where
+    E: Display,
+{
+    CoreError::operation(format!("{context} from {relay_url}: {error}"))
 }
 
 fn poll_from_events(events: &Events) -> Result<Poll, CoreError> {
@@ -177,23 +215,16 @@ fn map_invalid_poll_event(error: nostr::nips::nip88::Error) -> CoreError {
     CoreError::invalid_input(format!("invalid poll event: {error}"))
 }
 
-async fn get_poll_results_with_fetchers<FetchPoll, FetchVote, PollFuture, VoteFuture>(
+async fn get_poll_results_after_poll_fetch(
+    client: &Client,
     poll_event_id: &str,
     timeout_secs: u64,
     now: u64,
-    fetch_poll: FetchPoll,
-    fetch_vote: FetchVote,
-) -> Result<PollResults, CoreError>
-where
-    FetchPoll: FnOnce(EventId, u64) -> PollFuture,
-    FetchVote: FnOnce(EventId, u64) -> VoteFuture,
-    PollFuture: Future<Output = Result<Events, CoreError>>,
-    VoteFuture: Future<Output = Result<Events, CoreError>>,
-{
-    let poll_id = parse_poll_event_id(poll_event_id)?;
-    let poll_events = fetch_poll(poll_id, timeout_secs).await?;
+    poll_id: EventId,
+    poll_events: Events,
+) -> Result<PollResults, CoreError> {
     let poll = poll_from_events(&poll_events)?;
-    let vote_events = fetch_vote(poll_id, timeout_secs).await?;
+    let vote_events = fetch_vote_events(client, poll_id, timeout_secs).await?;
 
     Ok(build_poll_results(poll_event_id, poll, &vote_events, now))
 }
@@ -206,7 +237,7 @@ fn build_poll_results(
 ) -> PollResults {
     let options_map = options_map_for_poll(&poll);
     let (vote_counts, total_votes) = tally_votes(
-        vote_events.iter(),
+        vote_events,
         &options_map,
         poll.r#type,
         poll.ends_at.map(|value| value.as_secs()),
@@ -303,25 +334,24 @@ fn selected_options_from_event(vote_event: &Event) -> Vec<String> {
     selected_options
 }
 
-fn tally_votes<'a, I>(
-    vote_events: I,
+#[allow(clippy::collapsible_if)]
+fn tally_votes(
+    vote_events: &Events,
     options_map: &HashMap<String, String>,
     poll_type: PollType,
     ends_at: Option<u64>,
-) -> (HashMap<String, u64>, u64)
-where
-    I: IntoIterator<Item = &'a Event>,
-{
+) -> (HashMap<String, u64>, u64) {
     let mut vote_counts: HashMap<String, u64> = HashMap::new();
-    let mut votes_by_pubkey: HashMap<String, (u64, Vec<String>)> = HashMap::new();
+    let mut seen_pubkeys: HashSet<String> = HashSet::new();
+    let mut total_votes = 0;
 
-    for vote_event in vote_events {
+    for vote_event in vote_events.iter() {
         let vote_time = vote_event.created_at.as_secs();
 
-        if let Some(end_time) = ends_at
-            && vote_time > end_time
-        {
-            continue;
+        if let Some(end_time) = ends_at {
+            if vote_time > end_time {
+                continue;
+            }
         }
 
         let pubkey = vote_event.pubkey.to_hex();
@@ -331,18 +361,11 @@ where
             continue;
         }
 
-        if let Some((existing_time, _)) = votes_by_pubkey.get(&pubkey)
-            && vote_time <= *existing_time
-        {
+        if !seen_pubkeys.insert(pubkey) {
             continue;
         }
 
-        votes_by_pubkey.insert(pubkey, (vote_time, selected_options));
-    }
-
-    let mut total_votes = 0;
-    for (_time, selected_options) in votes_by_pubkey.values() {
-        let normalized = normalize_selected_options(selected_options, options_map, poll_type);
+        let normalized = normalize_selected_options(&selected_options, options_map, poll_type);
         if normalized.is_empty() {
             continue;
         }

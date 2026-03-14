@@ -1,15 +1,43 @@
 use super::{
     build_poll_results, create_poll, fetch_poll_events, fetch_vote_events,
-    get_poll_results_with_fetchers, map_invalid_poll_event, normalize_selected_options,
+    get_poll_results_after_poll_fetch, map_invalid_poll_event, normalize_selected_options,
     normalize_vote_option_ids, options_map_for_poll, parse_poll_event_id, parse_poll_type,
     parse_relays, poll_from_events, prepare_poll, prepare_vote, selected_options_from_event,
     tally_votes, vote_poll,
 };
 use nostr::nips::nip88::{Poll, PollOption as Nip88PollOption, PollResponse, PollType};
 use nostr_mcp_types::polls::{CreatePollArgs, PollOption as ApiPollOption, VotePollArgs};
+use nostr_relay_builder::builder::{PolicyResult, QueryPolicy};
+use nostr_relay_builder::prelude::BoxedFuture;
+use nostr_relay_builder::LocalRelay;
 use nostr_relay_builder::MockRelay;
+use nostr_relay_builder::RelayBuilder;
 use nostr_sdk::prelude::*;
 use std::collections::HashMap;
+use std::net::SocketAddr;
+
+#[derive(Debug)]
+struct RejectVoteQueries;
+
+impl QueryPolicy for RejectVoteQueries {
+    fn admit_query<'a>(
+        &'a self,
+        query: &'a Filter,
+        _addr: &'a SocketAddr,
+    ) -> BoxedFuture<'a, PolicyResult> {
+        Box::pin(async move {
+            if query
+                .kinds
+                .as_ref()
+                .is_some_and(|kinds| kinds.contains(&Kind::from(1018)))
+            {
+                PolicyResult::Reject("vote queries blocked".to_string())
+            } else {
+                PolicyResult::Accept
+            }
+        })
+    }
+}
 
 fn sample_options() -> Vec<ApiPollOption> {
     vec![
@@ -513,14 +541,43 @@ fn tally_votes_prefers_latest_and_ignores_ended() {
     let vote_a = build_vote_event(&keys, 100, vec!["a".to_string()]);
     let vote_b = build_vote_event(&keys, 200, vec!["b".to_string()]);
     let late_vote = build_vote_event(&Keys::generate(), 300, vec!["a".to_string()]);
+    let votes = vec![vote_a.clone(), vote_b.clone(), late_vote]
+        .into_iter()
+        .collect::<Events>();
 
-    let votes = [vote_a.clone(), vote_b.clone(), late_vote];
-    let (counts, total_votes) = tally_votes(
-        votes.iter(),
-        &options_map,
-        PollType::SingleChoice,
-        Some(250),
-    );
+    let (counts, total_votes) = tally_votes(&votes, &options_map, PollType::SingleChoice, Some(250));
+
+    assert_eq!(total_votes, 1);
+    assert_eq!(*counts.get("a").unwrap_or(&0), 0);
+    assert_eq!(*counts.get("b").unwrap_or(&0), 1);
+}
+
+#[test]
+fn tally_votes_uses_events_order_and_skips_invalid_paths() {
+    let mut options_map: HashMap<String, String> = HashMap::new();
+    options_map.insert("a".to_string(), "Alpha".to_string());
+    options_map.insert("b".to_string(), "Beta".to_string());
+
+    let repeated_voter = Keys::generate();
+    let late_vote = build_vote_event(&Keys::generate(), 300, vec!["a".to_string()]);
+    let newer_vote = build_vote_event(&repeated_voter, 220, vec!["b".to_string()]);
+    let no_response_vote = EventBuilder::new(Kind::from(1018), "")
+        .custom_created_at(Timestamp::from_secs(215))
+        .sign_with_keys(&Keys::generate())
+        .unwrap();
+    let older_vote = build_vote_event(&repeated_voter, 210, vec!["a".to_string()]);
+    let invalid_option_vote = build_vote_event(&Keys::generate(), 205, vec!["missing".to_string()]);
+    let votes = vec![
+        older_vote,
+        invalid_option_vote,
+        newer_vote,
+        no_response_vote,
+        late_vote,
+    ]
+    .into_iter()
+    .collect::<Events>();
+
+    let (counts, total_votes) = tally_votes(&votes, &options_map, PollType::SingleChoice, Some(250));
 
     assert_eq!(total_votes, 1);
     assert_eq!(*counts.get("a").unwrap_or(&0), 0);
@@ -534,9 +591,9 @@ fn tally_votes_skips_votes_without_response_tags() {
     let event = EventBuilder::new(Kind::from(1018), "")
         .sign_with_keys(&Keys::generate())
         .unwrap();
+    let vote_events = vec![event].into_iter().collect::<Events>();
 
-    let (counts, total_votes) =
-        tally_votes([event].iter(), &options_map, PollType::SingleChoice, None);
+    let (counts, total_votes) = tally_votes(&vote_events, &options_map, PollType::SingleChoice, None);
 
     assert!(counts.is_empty());
     assert_eq!(total_votes, 0);
@@ -547,9 +604,9 @@ fn tally_votes_skips_votes_without_valid_selected_options() {
     let mut options_map: HashMap<String, String> = HashMap::new();
     options_map.insert("a".to_string(), "Alpha".to_string());
     let event = build_vote_event(&Keys::generate(), 100, vec!["missing".to_string()]);
+    let vote_events = vec![event].into_iter().collect::<Events>();
 
-    let (counts, total_votes) =
-        tally_votes([event].iter(), &options_map, PollType::SingleChoice, None);
+    let (counts, total_votes) = tally_votes(&vote_events, &options_map, PollType::SingleChoice, None);
 
     assert!(counts.is_empty());
     assert_eq!(total_votes, 0);
@@ -917,84 +974,6 @@ async fn get_poll_results_reads_results_against_mock_relay() {
 }
 
 #[tokio::test]
-async fn get_poll_results_with_fetchers_propagates_poll_fetch_error() {
-    let err = get_poll_results_with_fetchers(
-        &EventId::all_zeros().to_hex(),
-        1,
-        1_000,
-        |_poll_id, _timeout_secs| async {
-            Err(crate::error::CoreError::operation("fetch poll: boom"))
-        },
-        |_poll_id, _timeout_secs| async { Ok(Vec::<Event>::new().into_iter().collect::<Events>()) },
-    )
-    .await
-    .unwrap_err();
-
-    assert_eq!(err.to_string(), "operation error: fetch poll: boom");
-}
-
-#[tokio::test]
-async fn get_poll_results_with_fetchers_propagates_real_poll_fetch_error() {
-    let client = Client::new(Keys::generate());
-    let err = get_poll_results_with_fetchers(
-        &EventId::all_zeros().to_hex(),
-        1,
-        1_000,
-        |poll_id, timeout_secs| fetch_poll_events(&client, poll_id, timeout_secs),
-        |_poll_id, _timeout_secs| async { Ok(Vec::<Event>::new().into_iter().collect::<Events>()) },
-    )
-    .await
-    .unwrap_err();
-
-    assert!(err.to_string().contains("fetch poll"));
-}
-
-#[tokio::test]
-async fn get_poll_results_with_fetchers_propagates_vote_fetch_error() {
-    let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
-    let poll_event = EventBuilder::poll(sample_poll(relay, PollType::SingleChoice, None))
-        .sign_with_keys(&Keys::generate())
-        .unwrap();
-    let poll_events = vec![poll_event].into_iter().collect::<Events>();
-
-    let err = get_poll_results_with_fetchers(
-        &EventId::all_zeros().to_hex(),
-        1,
-        1_000,
-        move |_poll_id, _timeout_secs| async move { Ok(poll_events) },
-        |_poll_id, _timeout_secs| async {
-            Err(crate::error::CoreError::operation("fetch votes: boom"))
-        },
-    )
-    .await
-    .unwrap_err();
-
-    assert_eq!(err.to_string(), "operation error: fetch votes: boom");
-}
-
-#[tokio::test]
-async fn get_poll_results_with_fetchers_propagates_real_vote_fetch_error() {
-    let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
-    let poll_event = EventBuilder::poll(sample_poll(relay, PollType::SingleChoice, None))
-        .sign_with_keys(&Keys::generate())
-        .unwrap();
-    let poll_events = vec![poll_event].into_iter().collect::<Events>();
-    let client = Client::new(Keys::generate());
-
-    let err = get_poll_results_with_fetchers(
-        &EventId::all_zeros().to_hex(),
-        1,
-        1_000,
-        move |_poll_id, _timeout_secs| async move { Ok(poll_events) },
-        |poll_id, timeout_secs| fetch_vote_events(&client, poll_id, timeout_secs),
-    )
-    .await
-    .unwrap_err();
-
-    assert!(err.to_string().contains("fetch votes"));
-}
-
-#[tokio::test]
 async fn get_poll_results_rejects_missing_poll() {
     let relay = MockRelay::run().await.unwrap();
     let url = relay.url().await;
@@ -1015,6 +994,51 @@ async fn get_poll_results_propagates_fetch_poll_error() {
         .unwrap_err();
 
     assert!(err.to_string().contains("fetch poll"));
+}
+
+#[tokio::test]
+async fn get_poll_results_propagates_fetch_vote_error() {
+    let relay = LocalRelay::new(RelayBuilder::default().query_policy(RejectVoteQueries));
+    relay.run().await.unwrap();
+    let url = relay.url().await;
+    let poll_keys = Keys::generate();
+    let poll_event = seed_poll(
+        url.clone(),
+        &poll_keys,
+        sample_poll(url.clone(), PollType::SingleChoice, None),
+        100,
+    )
+    .await;
+    let client = connected_client(Keys::generate(), &url).await;
+
+    let err = super::get_poll_results(&client, &poll_event.id.to_hex(), 1)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("fetch votes"));
+}
+
+#[tokio::test]
+async fn get_poll_results_after_poll_fetch_propagates_real_vote_fetch_error() {
+    let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
+    let poll_event = EventBuilder::poll(sample_poll(relay, PollType::SingleChoice, None))
+        .sign_with_keys(&Keys::generate())
+        .unwrap();
+    let poll_events = vec![poll_event].into_iter().collect::<Events>();
+    let client = Client::new(Keys::generate());
+
+    let err = get_poll_results_after_poll_fetch(
+        &client,
+        &EventId::all_zeros().to_hex(),
+        1,
+        1_000,
+        EventId::all_zeros(),
+        poll_events,
+    )
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("fetch votes"));
 }
 
 #[tokio::test]
