@@ -18,6 +18,32 @@ pub enum Nip46Error {
     InvalidRelayUrl(String),
     #[error("invalid url: {0}")]
     InvalidUrl(String),
+    #[error("invalid json: {0}")]
+    InvalidJson(String),
+    #[error("unsupported method: {0}")]
+    UnsupportedMethod(String),
+    #[error("invalid message: missing request id")]
+    MissingRequestId,
+    #[error("invalid message: expected request")]
+    ExpectedRequestMessage,
+    #[error("invalid message: expected response")]
+    ExpectedResponseMessage,
+    #[error("invalid params for `{method}`: expected {expected}, received {received}")]
+    InvalidParamsLength {
+        method: String,
+        expected: String,
+        received: usize,
+    },
+    #[error("response error: {0}")]
+    ResponseError(String),
+    #[error("unexpected response id: expected `{expected}`, received `{received}`")]
+    UnexpectedResponseId { expected: String, received: String },
+    #[error("unexpected remote signer public key: expected `{expected}`, received `{received}`")]
+    UnexpectedRemoteSignerPublicKey { expected: String, received: String },
+    #[error("unexpected connect result: expected `{expected}`, received `{received}`")]
+    UnexpectedConnectResult { expected: String, received: String },
+    #[error("invalid connect flow: {0}")]
+    InvalidConnectFlow(String),
 }
 
 impl Nip46Error {
@@ -47,5 +73,45 @@ impl Nip46Error {
         S: Into<String>,
     {
         Self::InvalidUrl(message.into())
+    }
+
+    pub fn invalid_json<S>(message: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::InvalidJson(message.into())
+    }
+
+    pub fn unsupported_method<S>(message: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::UnsupportedMethod(message.into())
+    }
+
+    pub fn invalid_params_length<S, T>(method: S, expected: T, received: usize) -> Self
+    where
+        S: Into<String>,
+        T: Into<String>,
+    {
+        Self::InvalidParamsLength {
+            method: method.into(),
+            expected: expected.into(),
+            received,
+        }
+    }
+
+    pub fn response_error<S>(message: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::ResponseError(message.into())
+    }
+
+    pub fn invalid_connect_flow<S>(message: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::InvalidConnectFlow(message.into())
     }
 }
