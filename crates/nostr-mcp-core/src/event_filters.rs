@@ -265,7 +265,9 @@ fn validate_filter_bounds(filter: &Filter) -> Result<(), CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use super::EventFilterService;
+    use super::{
+        EventFilterService, ensure_non_empty, parse_public_key, parse_public_key_with_context,
+    };
     use nostr_mcp_types::events::{
         EventsListArgs, LongFormListArgs, QueryEventsArgs, SearchEventsArgs,
     };
@@ -283,6 +285,17 @@ mod tests {
         assert!(filter.authors.as_ref().unwrap().contains(&pubkey));
         assert_eq!(filter.since, Some(since));
         assert_eq!(filter.until, Some(until));
+    }
+
+    #[test]
+    fn my_notes_uses_default_since_without_until() {
+        let pubkey = Keys::generate().public_key();
+        let filter = EventFilterService::my_notes(pubkey, None, None);
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
+        assert!(filter.authors.as_ref().unwrap().contains(&pubkey));
+        assert!(filter.since.is_some());
+        assert_eq!(filter.until, None);
     }
 
     #[test]
@@ -359,6 +372,247 @@ mod tests {
     }
 
     #[test]
+    fn preset_filter_supports_my_notes_preset() {
+        let active_pubkey = Keys::generate().public_key();
+        let args = EventsListArgs {
+            preset: "my_notes".to_string(),
+            limit: Some(4),
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: Some(10),
+            until: Some(20),
+        };
+
+        let filter = EventFilterService::preset_filter(active_pubkey, &args).unwrap();
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
+        assert!(filter.authors.as_ref().unwrap().contains(&active_pubkey));
+        assert_eq!(filter.limit, Some(4));
+        assert_eq!(filter.since, Some(Timestamp::from(10)));
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+    }
+
+    #[test]
+    fn preset_filter_supports_mentions_me_preset() {
+        let active_pubkey = Keys::generate().public_key();
+        let args = EventsListArgs {
+            preset: "mentions_me".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: None,
+            until: Some(20),
+        };
+
+        let filter = EventFilterService::preset_filter(active_pubkey, &args).unwrap();
+
+        let p_tag = SingleLetterTag::lowercase(Alphabet::P);
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
+        assert!(
+            filter
+                .generic_tags
+                .get(&p_tag)
+                .unwrap()
+                .contains(&active_pubkey.to_hex())
+        );
+        assert!(filter.since.is_some());
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+    }
+
+    #[test]
+    fn preset_filter_supports_my_metadata_preset() {
+        let active_pubkey = Keys::generate().public_key();
+        let args = EventsListArgs {
+            preset: "my_metadata".to_string(),
+            limit: Some(2),
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let filter = EventFilterService::preset_filter(active_pubkey, &args).unwrap();
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::Metadata));
+        assert!(filter.authors.as_ref().unwrap().contains(&active_pubkey));
+        assert_eq!(filter.limit, Some(2));
+    }
+
+    #[test]
+    fn preset_filter_by_author_uses_default_since() {
+        let keys = Keys::generate();
+        let args = EventsListArgs {
+            preset: "by_author".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: Some(keys.public_key().to_bech32().unwrap()),
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let filter =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap();
+
+        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(filter.since.is_some());
+        assert_eq!(filter.until, None);
+    }
+
+    #[test]
+    fn preset_filter_by_author_preserves_until() {
+        let keys = Keys::generate();
+        let args = EventsListArgs {
+            preset: "by_author".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: Some(keys.public_key().to_bech32().unwrap()),
+            kind: None,
+            since: Some(10),
+            until: Some(20),
+        };
+
+        let filter =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap();
+
+        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert_eq!(filter.since, Some(Timestamp::from(10)));
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+    }
+
+    #[test]
+    fn preset_filter_by_kind_requires_kind() {
+        let args = EventsListArgs {
+            preset: "by_kind".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("kind is required"));
+    }
+
+    #[test]
+    fn preset_filter_by_kind_allows_missing_author() {
+        let args = EventsListArgs {
+            preset: "by_kind".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: None,
+            kind: Some(30023),
+            since: None,
+            until: None,
+        };
+
+        let filter =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap();
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::from(30023)));
+        assert!(filter.authors.is_none());
+        assert!(filter.since.is_some());
+        assert_eq!(filter.until, None);
+    }
+
+    #[test]
+    fn preset_filter_by_kind_rejects_invalid_optional_author() {
+        let args = EventsListArgs {
+            preset: "by_kind".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: Some("invalid".to_string()),
+            kind: Some(1),
+            since: None,
+            until: None,
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("invalid"));
+    }
+
+    #[test]
+    fn preset_filter_rejects_unknown_preset() {
+        let args = EventsListArgs {
+            preset: "other".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("unknown preset"));
+    }
+
+    #[test]
+    fn preset_filter_rejects_zero_limit() {
+        let args = EventsListArgs {
+            preset: "my_notes".to_string(),
+            limit: Some(0),
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("limit must be"));
+    }
+
+    #[test]
+    fn preset_filter_rejects_reverse_time_bounds() {
+        let args = EventsListArgs {
+            preset: "my_notes".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: None,
+            kind: None,
+            since: Some(20),
+            until: Some(10),
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("since must be"));
+    }
+
+    #[test]
+    fn preset_filter_by_author_rejects_invalid_author() {
+        let args = EventsListArgs {
+            preset: "by_author".to_string(),
+            limit: None,
+            timeout_secs: None,
+            author_npub: Some("invalid".to_string()),
+            kind: None,
+            since: None,
+            until: None,
+        };
+
+        let err =
+            EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap_err();
+
+        assert!(err.to_string().contains("invalid"));
+    }
+
+    #[test]
     fn parse_filters_rejects_empty() {
         let args = QueryEventsArgs {
             filters: vec![],
@@ -399,6 +653,73 @@ mod tests {
         let filters = EventFilterService::query_filters(&args).unwrap();
 
         assert_eq!(filters[0].limit, Some(5));
+    }
+
+    #[test]
+    fn parse_filters_rejects_invalid_json() {
+        let args = QueryEventsArgs {
+            filters: vec![json!("bad-filter")],
+            timeout_secs: None,
+            limit: None,
+        };
+
+        let err = EventFilterService::query_filters(&args).unwrap_err();
+
+        assert!(err.to_string().contains("invalid filter json"));
+    }
+
+    #[test]
+    fn parse_filters_reject_invalid_limit_in_payload() {
+        let args = QueryEventsArgs {
+            filters: vec![json!({
+                "kinds": [1],
+                "limit": 0
+            })],
+            timeout_secs: None,
+            limit: None,
+        };
+
+        let err = EventFilterService::query_filters(&args).unwrap_err();
+
+        assert!(err.to_string().contains("limit must be"));
+    }
+
+    #[test]
+    fn parse_filters_reject_zero_limit_override() {
+        let args = QueryEventsArgs {
+            filters: vec![json!({
+                "kinds": [1]
+            })],
+            timeout_secs: None,
+            limit: Some(0),
+        };
+
+        let err = EventFilterService::query_filters(&args).unwrap_err();
+
+        assert!(err.to_string().contains("limit must be"));
+    }
+
+    #[test]
+    fn parse_filters_accept_valid_payload_without_override() {
+        let keys = Keys::generate();
+        let args = QueryEventsArgs {
+            filters: vec![json!({
+                "authors": [keys.public_key().to_hex()],
+                "kinds": [1],
+                "since": 10,
+                "until": 20,
+                "limit": 2
+            })],
+            timeout_secs: None,
+            limit: None,
+        };
+
+        let filters = EventFilterService::query_filters(&args).unwrap();
+
+        assert!(filters[0].authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert_eq!(filters[0].limit, Some(2));
+        assert_eq!(filters[0].since, Some(Timestamp::from(10)));
+        assert_eq!(filters[0].until, Some(Timestamp::from(20)));
     }
 
     #[test]
@@ -501,6 +822,99 @@ mod tests {
     }
 
     #[test]
+    fn long_form_filter_rejects_empty_hashtag_list() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some("post-1".to_string()),
+            hashtags: Some(vec![]),
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::long_form_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("hashtags must not be empty"));
+    }
+
+    #[test]
+    fn long_form_filter_rejects_invalid_author() {
+        let args = LongFormListArgs {
+            author_npub: Some("invalid".to_string()),
+            identifier: None,
+            hashtags: None,
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::long_form_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("invalid author npub"));
+    }
+
+    #[test]
+    fn long_form_filter_rejects_reverse_time_bounds() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some("post-1".to_string()),
+            hashtags: None,
+            limit: None,
+            since: Some(20),
+            until: Some(10),
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::long_form_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("since must be"));
+    }
+
+    #[test]
+    fn long_form_filter_rejects_zero_limit() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some("post-1".to_string()),
+            hashtags: None,
+            limit: Some(0),
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::long_form_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("limit must be"));
+    }
+
+    #[test]
+    fn long_form_filter_accepts_identifier_only_constraint() {
+        let args = LongFormListArgs {
+            author_npub: None,
+            identifier: Some(" post-1 ".to_string()),
+            hashtags: None,
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let filter = EventFilterService::long_form_filter(&args).unwrap();
+        let identifier_tag = SingleLetterTag::lowercase(Alphabet::D);
+
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::from(30023)));
+        assert!(
+            filter
+                .generic_tags
+                .get(&identifier_tag)
+                .unwrap()
+                .contains("post-1")
+        );
+    }
+
+    #[test]
     fn search_filter_rejects_empty_query() {
         let args = SearchEventsArgs {
             query: "   ".to_string(),
@@ -532,5 +946,114 @@ mod tests {
         let err = EventFilterService::search_filter(&args).unwrap_err();
 
         assert!(err.to_string().contains("kinds must not be empty"));
+    }
+
+    #[test]
+    fn search_filter_accepts_all_supported_fields() {
+        let keys = Keys::generate();
+        let args = SearchEventsArgs {
+            query: "  nostr search  ".to_string(),
+            kinds: Some(vec![1, 30023]),
+            author_npub: Some(keys.public_key().to_bech32().unwrap()),
+            limit: Some(9),
+            since: Some(10),
+            until: Some(20),
+            timeout_secs: None,
+        };
+
+        let filter = EventFilterService::search_filter(&args).unwrap();
+
+        assert_eq!(filter.search.as_deref(), Some("nostr search"));
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
+        assert!(filter.kinds.as_ref().unwrap().contains(&Kind::from(30023)));
+        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert_eq!(filter.limit, Some(9));
+        assert_eq!(filter.since, Some(Timestamp::from(10)));
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+    }
+
+    #[test]
+    fn search_filter_accepts_query_without_limit() {
+        let args = SearchEventsArgs {
+            query: "nostr".to_string(),
+            kinds: None,
+            author_npub: None,
+            limit: None,
+            since: None,
+            until: Some(20),
+            timeout_secs: None,
+        };
+
+        let filter = EventFilterService::search_filter(&args).unwrap();
+
+        assert_eq!(filter.search.as_deref(), Some("nostr"));
+        assert_eq!(filter.limit, None);
+        assert_eq!(filter.until, Some(Timestamp::from(20)));
+    }
+
+    #[test]
+    fn search_filter_rejects_reverse_time_bounds() {
+        let args = SearchEventsArgs {
+            query: "nostr".to_string(),
+            kinds: None,
+            author_npub: None,
+            limit: None,
+            since: Some(20),
+            until: Some(10),
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::search_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("since must be"));
+    }
+
+    #[test]
+    fn search_filter_rejects_zero_limit() {
+        let args = SearchEventsArgs {
+            query: "nostr".to_string(),
+            kinds: None,
+            author_npub: None,
+            limit: Some(0),
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::search_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("limit must be"));
+    }
+
+    #[test]
+    fn search_filter_rejects_invalid_author() {
+        let args = SearchEventsArgs {
+            query: "nostr".to_string(),
+            kinds: None,
+            author_npub: Some("invalid".to_string()),
+            limit: None,
+            since: None,
+            until: None,
+            timeout_secs: None,
+        };
+
+        let err = EventFilterService::search_filter(&args).unwrap_err();
+
+        assert!(err.to_string().contains("invalid author npub"));
+    }
+
+    #[test]
+    fn helper_parsers_and_trimming_remain_stable() {
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+
+        assert_eq!(ensure_non_empty("identifier", "  value  ").unwrap(), "value");
+        assert_eq!(parse_public_key(&npub).unwrap(), keys.public_key());
+
+        let err = parse_public_key("invalid").unwrap_err();
+        assert!(err.to_string().contains("invalid"));
+
+        let err = parse_public_key_with_context("author npub", "invalid").unwrap_err();
+        assert!(err.to_string().contains("invalid author npub"));
     }
 }

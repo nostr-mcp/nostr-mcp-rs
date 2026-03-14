@@ -147,7 +147,8 @@ fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> 
 
 #[cfg(test)]
 mod tests {
-    use super::ReferenceParser;
+    use super::{ReferenceParser, find_subslice, is_bech32_char};
+    use nostr::nips::nip19::{Nip19Coordinate, Nip19Event, Nip19Profile};
     use nostr::prelude::*;
     use nostr_mcp_types::references::{ParseReferencesArgs, ReferenceType};
 
@@ -167,12 +168,12 @@ mod tests {
         assert!(
             references
                 .iter()
-                .any(|reference| matches!(reference.reference_type, ReferenceType::Npub))
+                .any(|reference| reference.reference_type == ReferenceType::Npub)
         );
         assert!(
             references
                 .iter()
-                .any(|reference| matches!(reference.reference_type, ReferenceType::Note))
+                .any(|reference| reference.reference_type == ReferenceType::Note)
         );
     }
 
@@ -191,10 +192,7 @@ mod tests {
         let references = ReferenceParser::parse_content("nostr:note1invalid");
 
         assert_eq!(references.len(), 1);
-        assert!(matches!(
-            references[0].reference_type,
-            ReferenceType::Invalid
-        ));
+        assert_eq!(references[0].reference_type, ReferenceType::Invalid);
     }
 
     #[test]
@@ -207,5 +205,113 @@ mod tests {
         let result = ReferenceParser::parse(args);
 
         assert_eq!(result.references.len(), 1);
+    }
+
+    #[test]
+    fn parse_content_returns_empty_when_no_references_exist() {
+        assert!(ReferenceParser::parse_content("hello world").is_empty());
+    }
+
+    #[test]
+    fn parse_content_skips_prefix_without_bech32_payload() {
+        assert!(ReferenceParser::parse_content("nostr:!").is_empty());
+    }
+
+    #[test]
+    fn parse_text_references_supports_nprofile() {
+        let keys = Keys::generate();
+        let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
+        let nprofile = Nip19Profile::new(keys.public_key(), [relay.clone()])
+            .to_bech32()
+            .unwrap();
+        let pubkey_hex = keys.public_key().to_hex();
+
+        let references = ReferenceParser::parse_content(&format!("nostr:{nprofile}"));
+
+        assert_eq!(references.len(), 1);
+        assert_eq!(references[0].reference_type, ReferenceType::Nprofile);
+        assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
+        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+    }
+
+    #[test]
+    fn parse_text_references_supports_nevent() {
+        let keys = Keys::generate();
+        let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
+        let event = EventBuilder::text_note("hello")
+            .sign_with_keys(&keys)
+            .unwrap();
+        let nevent = Nip19Event::new(event.id)
+            .author(keys.public_key())
+            .kind(event.kind)
+            .relays([relay.clone()])
+            .to_bech32()
+            .unwrap();
+        let pubkey_hex = keys.public_key().to_hex();
+        let event_id_hex = event.id.to_hex();
+
+        let references = ReferenceParser::parse_content(&format!("nostr:{nevent}"));
+
+        assert_eq!(references.len(), 1);
+        assert_eq!(references[0].reference_type, ReferenceType::Nevent);
+        assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
+        assert_eq!(references[0].event_id.as_deref(), Some(event_id_hex.as_str()));
+        assert_eq!(references[0].kind, Some(event.kind.as_u16()));
+        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+    }
+
+    #[test]
+    fn parse_text_references_supports_naddr() {
+        let keys = Keys::generate();
+        let relay = RelayUrl::parse("wss://relay.example.com").unwrap();
+        let coordinate = Coordinate::new(Kind::from(30023), keys.public_key()).identifier("post-1");
+        let naddr = Nip19Coordinate::new(coordinate.clone(), [relay.clone()])
+            .to_bech32()
+            .unwrap();
+        let pubkey_hex = keys.public_key().to_hex();
+
+        let references = ReferenceParser::parse_content(&format!("nostr:{naddr}"));
+
+        assert_eq!(references.len(), 1);
+        assert_eq!(references[0].reference_type, ReferenceType::Naddr);
+        assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
+        assert_eq!(references[0].kind, Some(coordinate.kind.as_u16()));
+        assert_eq!(references[0].identifier.as_deref(), Some("post-1"));
+        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+    }
+
+    #[test]
+    fn parse_text_references_marks_nsec_as_unsupported() {
+        let keys = Keys::generate();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+
+        let references = ReferenceParser::parse_content(&format!("nostr:{nsec}"));
+
+        assert_eq!(references.len(), 1);
+        assert_eq!(references[0].reference_type, ReferenceType::Nsec);
+        assert!(
+            references[0]
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("secret keys are not supported")
+        );
+    }
+
+    #[test]
+    fn bech32_character_detection_accepts_only_lowercase_and_digits() {
+        assert!(is_bech32_char(b'a'));
+        assert!(is_bech32_char(b'7'));
+        assert!(!is_bech32_char(b'A'));
+        assert!(!is_bech32_char(b'-'));
+    }
+
+    #[test]
+    fn find_subslice_handles_empty_and_out_of_range_inputs() {
+        let haystack = b"nostr:npub1test";
+
+        assert_eq!(find_subslice(haystack, b"nostr:", 0), Some(0));
+        assert_eq!(find_subslice(haystack, b"nostr:", haystack.len()), None);
+        assert_eq!(find_subslice(haystack, b"", 0), None);
     }
 }
