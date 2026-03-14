@@ -1589,6 +1589,7 @@ dependencies = [
  "nostr-mcp-server",
  "nostr-mcp-tools",
  "rmcp",
+ "tempfile",
  "tokio",
  "tracing",
 ]
