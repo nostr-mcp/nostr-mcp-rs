@@ -258,12 +258,15 @@ mod tests {
     use nostr_mcp_types::nip30::Nip30ParseArgs;
     use nostr_mcp_types::publish::{CreateTextArgs, SignEventArgs};
     use nostr_mcp_types::references::ParseReferencesArgs;
+    use nostr_mcp_types::registry::{
+        ToolContract, ToolRegistry, ToolStatus, generated_tool_registry,
+        read_generated_registry_artifact,
+    };
     use nostr_mcp_types::settings::FollowEntry;
     use rmcp::ServerHandler;
     use rmcp::handler::server::wrapper::Parameters;
     use rmcp::model::CallToolResult;
-    use serde::Deserialize;
-    use serde_json::{Map, Value};
+    use serde_json::Value;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -320,34 +323,14 @@ mod tests {
     const REDACTED_SIGNATURE: &str = "<redacted_signature>";
     const REDACTED_TIMESTAMP: &str = "<redacted_timestamp>";
 
-    #[derive(Deserialize)]
-    struct ToolRegistry {
-        tools: Vec<ToolEntry>,
-    }
-
-    #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-    #[serde(rename_all = "lowercase")]
-    enum ToolStatus {
-        Stable,
-        Planned,
-    }
-
-    #[derive(Deserialize)]
-    struct ToolEntry {
-        name: String,
-        status: ToolStatus,
-        summary: String,
-        #[serde(default)]
-        input_schema: Map<String, Value>,
-        #[serde(default)]
-        output_schema: Map<String, Value>,
-    }
-
-    fn load_tool_registry() -> ToolRegistry {
-        let path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../spec/registry/tools.json");
-        let data = std::fs::read_to_string(&path).expect("read tools registry");
-        serde_json::from_str(&data).expect("parse tools registry")
+    fn canonical_tool_registry() -> ToolRegistry {
+        let artifact = read_generated_registry_artifact();
+        let generated = generated_tool_registry();
+        assert_eq!(
+            artifact, generated,
+            "generated registry artifact drifted from runtime contract generation"
+        );
+        artifact
     }
 
     fn characterized_live_registry_tool_names(registry: &ToolRegistry) -> BTreeSet<String> {
@@ -361,7 +344,7 @@ mod tests {
             .collect()
     }
 
-    fn characterized_live_registry_tools(registry: &ToolRegistry) -> Vec<&ToolEntry> {
+    fn characterized_live_registry_tools(registry: &ToolRegistry) -> Vec<&ToolContract> {
         registry
             .tools
             .iter()
@@ -543,7 +526,7 @@ mod tests {
 
     fn assert_registry_surface_guard() {
         let server = NostrMcpServer::new();
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_registry_characterization(&registry);
         assert_live_router_matches_registry(&server, &registry);
         assert_server_instructions_match_registry(&server, &registry);
@@ -715,54 +698,60 @@ mod tests {
     }
 
     #[test]
-    fn tool_registry_matches_characterized_surface() {
-        let registry = load_tool_registry();
+    fn generated_registry_matches_characterized_surface() {
+        let registry = canonical_tool_registry();
         assert_registry_characterization(&registry);
     }
 
     #[test]
-    fn live_tool_router_matches_characterized_registry_surface() {
+    fn generated_registry_artifact_matches_runtime_generation() {
+        let registry = canonical_tool_registry();
+        assert_eq!(registry, generated_tool_registry());
+    }
+
+    #[test]
+    fn live_tool_router_matches_characterized_generated_registry_surface() {
         let server = NostrMcpServer::new();
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_live_router_matches_registry(&server, &registry);
     }
 
     #[test]
-    fn server_instructions_match_characterized_registry_surface() {
+    fn server_instructions_match_characterized_generated_registry_surface() {
         let server = NostrMcpServer::new();
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_server_instructions_match_registry(&server, &registry);
     }
 
     #[test]
-    fn stable_registry_tools_define_input_and_output_schemas() {
-        let registry = load_tool_registry();
+    fn stable_generated_registry_tools_define_input_and_output_schemas() {
+        let registry = canonical_tool_registry();
         assert_stable_registry_schemas(&registry);
     }
 
     #[test]
     fn stable_live_tool_routes_define_descriptions_and_input_schemas() {
         let server = NostrMcpServer::new();
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_stable_live_route_metadata(&server, &registry);
     }
 
     #[test]
     fn stable_live_tool_routes_do_not_yet_define_output_schemas() {
         let server = NostrMcpServer::new();
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_stable_live_route_output_schema_posture(&server, &registry);
     }
 
     #[test]
     fn golden_read_only_tool_cohort_is_characterized() {
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_golden_read_only_tool_cohort(&registry);
     }
 
     #[test]
     fn golden_write_tool_cohort_is_characterized() {
-        let registry = load_tool_registry();
+        let registry = canonical_tool_registry();
         assert_golden_write_tool_cohort(&registry);
     }
 
