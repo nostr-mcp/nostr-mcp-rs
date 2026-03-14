@@ -13,17 +13,15 @@ description = "Nostr MCP tools server"
 keywords = ["nostr", "mcp", "rust"]
 
 [dependencies]
-anyhow = { workspace = true }
 nostr = { workspace = true }
 nostr-mcp-core = { workspace = true }
 nostr-mcp-policy = { workspace = true }
 nostr-mcp-server = { workspace = true }
 nostr-mcp-types = { workspace = true }
 nostr-sdk = { workspace = true }
-rmcp = { workspace = true, features = ["server", "macros", "transport-io", "schemars"] }
+rmcp = { workspace = true, features = ["server", "macros", "schemars"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
-tracing = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 
 [features]
 keyring = ["nostr-mcp-server/keyring"]

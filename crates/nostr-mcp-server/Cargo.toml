@@ -25,13 +25,11 @@ nostr-mcp-policy = { workspace = true }
 nostr-mcp-types = { workspace = true }
 nostr-sdk = { workspace = true }
 rand = { workspace = true }
-rmcp = { workspace = true, features = ["server"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
-tracing = { workspace = true }
 zeroize = { workspace = true }
 
 [features]

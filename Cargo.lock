@@ -1543,14 +1543,12 @@ dependencies = [
  "nostr-mcp-types",
  "nostr-sdk",
  "rand 0.8.5",
- "rmcp",
  "schemars",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tracing",
  "zeroize",
 ]
 
@@ -1558,7 +1556,6 @@ dependencies = [
 name = "nostr-mcp-tools"
 version = "0.1.0-alpha.1"
 dependencies = [
- "anyhow",
  "nostr",
  "nostr-mcp-core",
  "nostr-mcp-policy",
@@ -1568,6 +1565,17 @@ dependencies = [
  "rmcp",
  "serde_json",
  "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "nostr-mcp-transport-stdio"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "nostr-mcp-server",
+ "nostr-mcp-tools",
+ "rmcp",
  "tokio",
  "tracing",
 ]

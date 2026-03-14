@@ -24,15 +24,12 @@ use nostr_mcp_server::{
     service::NostrMcpServerServiceError,
 };
 use rmcp::{
-    ServerHandler, ServiceExt,
+    ServerHandler,
     handler::server::router::tool::ToolRouter,
     model::{ErrorData, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
     tool_handler, tool_router,
-    transport::stdio,
 };
 use std::sync::Arc;
-use tokio::time::{Duration, sleep};
-use tracing::info;
 
 fn core_error(err: CoreError) -> ErrorData {
     if let CoreError::InvalidInput(msg) = err {
@@ -90,7 +87,7 @@ impl NostrMcpServer {
         self.services.runtime()
     }
 
-    async fn initialize(&self) -> HostRuntimeResult<()> {
+    pub async fn initialize(&self) -> HostRuntimeResult<()> {
         self.services.initialize().await
     }
 
@@ -213,52 +210,6 @@ impl ServerHandler for NostrMcpServer {
             instructions: Some(NostrMcpServerCatalog::generated().instructions()),
         }
     }
-}
-
-async fn wait_for_shutdown() {
-    #[cfg(unix)]
-    {
-        use tokio::signal::unix::{SignalKind, signal};
-        let mut term = signal(SignalKind::terminate()).expect("signal");
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {},
-            _ = term.recv() => {},
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = tokio::signal::ctrl_c().await;
-    }
-}
-
-pub async fn start_stdio_server() -> anyhow::Result<()> {
-    start_stdio_server_with_runtime(NostrMcpRuntime::default()).await
-}
-
-pub async fn start_stdio_server_with_runtime(
-    runtime_config: NostrMcpRuntime,
-) -> anyhow::Result<()> {
-    let server_name = runtime_config.server_name.clone();
-    let server = NostrMcpServer::with_runtime(runtime_config);
-    server.initialize().await?;
-    info!("starting {server_name} MCP server (stdio)");
-    loop {
-        let service = server.clone().serve(stdio()).await?;
-        info!("server ready (stdio)");
-        tokio::select! {
-            _ = service.waiting() => {
-                info!("stdio input closed; restarting");
-                sleep(Duration::from_millis(200)).await;
-                continue;
-            }
-            _ = wait_for_shutdown() => {
-                info!("shutdown signal received");
-                break;
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

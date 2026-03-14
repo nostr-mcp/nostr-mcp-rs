@@ -1,0 +1,24 @@
+[package]
+name = "nostr-mcp-transport-stdio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "Stdio transport adapter for nostr-mcp"
+keywords = ["nostr", "mcp", "stdio"]
+
+[dependencies]
+anyhow = { workspace = true }
+nostr-mcp-server = { workspace = true }
+nostr-mcp-tools = { workspace = true }
+rmcp = { workspace = true, features = ["server", "transport-io"] }
+tokio = { workspace = true, features = ["macros", "rt", "signal", "time"] }
+tracing = { workspace = true }
+
+[features]
+keyring = ["nostr-mcp-tools/keyring"]
