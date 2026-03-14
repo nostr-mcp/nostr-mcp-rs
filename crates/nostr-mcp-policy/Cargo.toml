@@ -1,0 +1,20 @@
+[package]
+name = "nostr-mcp-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "Signer and capability policy types for nostr-mcp"
+keywords = ["nostr", "mcp", "policy"]
+
+[dependencies]
+schemars = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1516,6 +1516,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nostr-mcp-policy"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nostr-mcp-tools"
 version = "0.1.0-alpha.1"
 dependencies = [
