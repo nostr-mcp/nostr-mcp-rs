@@ -221,17 +221,22 @@ mod tests {
     };
     use nostr_mcp_server::{default_runtime_signer_policy, host_runtime::error::HostRuntimeError};
     use nostr_mcp_types::common::EmptyArgs;
-    use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
-    use nostr_mcp_types::key_store::{
-        ExportArgs, ExportFormat, GenerateArgs, ImportArgs, RemoveArgs, RenameLabelArgs,
-        SetActiveArgs,
+    use nostr_mcp_types::follows::{
+        AddFollowArgs, FollowsLookupResult, FollowsMutationResult, PublishFollowsResult,
+        RemoveFollowArgs, SetFollowsArgs,
     };
-    use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
-    use nostr_mcp_types::metadata::SetMetadataArgs;
-    use nostr_mcp_types::nip30::Nip30ParseArgs;
+    use nostr_mcp_types::key_store::{
+        ExportArgs, ExportFormat, ExportResult, GenerateArgs, ImportArgs, KeyEntry,
+        KeyRemovalResult, KeysListResult, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+    };
+    use nostr_mcp_types::keys::{DerivePublicArgs, DerivePublicResult, VerifyArgs, VerifyResult};
+    use nostr_mcp_types::metadata::{MetadataResult, SetMetadataArgs, StoredMetadataResult};
+    use nostr_mcp_types::nip30::{Nip30ParseArgs, Nip30ParseResult};
     use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
-    use nostr_mcp_types::publish::{CreateTextArgs, PostTextArgs, SignEventArgs};
-    use nostr_mcp_types::references::ParseReferencesArgs;
+    use nostr_mcp_types::publish::{
+        CreateTextArgs, CreateTextResult, PostTextArgs, SignEventArgs, SignEventResult,
+    };
+    use nostr_mcp_types::references::{ParseReferencesArgs, ParseReferencesResult};
     use nostr_mcp_types::registry::{
         ToolContract, ToolRegistry, ToolStatus, generated_tool_registry,
         read_generated_registry_artifact,
@@ -289,6 +294,8 @@ mod tests {
         "nsec10allq0gjx7fddtzef0ax00mdps9t2kmtrldkyjfs8l5xruwvh2dq0lhhkp";
     const FIXTURE_PRIMARY_NPUB: &str =
         "npub1zutzeysacnf9rru6zqwmxd54mud0k44tst6l70ja5mhv8jjumytsd2x7nu";
+    const FIXTURE_PRIMARY_PUBKEY_HEX: &str =
+        "17162c921dc4d2518f9a101db33695df1afb56ab82f5ff3e5da6eec3ca5cd917";
     const FIXTURE_SECONDARY_NPUB: &str =
         "npub16sdj9zv4f8sl85e45vgq9n7nsgt5qphpvmf7vk8r5hhvmdjxx4es8rq74h";
     const FIXTURE_SECONDARY_PUBKEY_HEX: &str =
@@ -318,6 +325,17 @@ mod tests {
             .collect()
     }
 
+    fn characterized_live_registry_tool_names_in_order(registry: &ToolRegistry) -> Vec<String> {
+        registry
+            .tools
+            .iter()
+            .filter(|tool| {
+                tool.status == ToolStatus::Stable && !HOST_LOCAL_TOOLS.contains(&tool.name.as_str())
+            })
+            .map(|tool| tool.name.clone())
+            .collect()
+    }
+
     fn characterized_live_registry_tools(registry: &ToolRegistry) -> Vec<&ToolContract> {
         registry
             .tools
@@ -326,6 +344,38 @@ mod tests {
                 tool.status == ToolStatus::Stable && !HOST_LOCAL_TOOLS.contains(&tool.name.as_str())
             })
             .collect()
+    }
+
+    fn is_placeholder_schema(schema: &serde_json::Map<String, Value>) -> bool {
+        schema.len() == 2
+            && schema.get("type") == Some(&Value::String("object".to_string()))
+            && schema.get("additionalProperties") == Some(&Value::Bool(true))
+    }
+
+    fn schema_contract_shape(schema: &serde_json::Map<String, Value>) -> Value {
+        let property_names = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .map(|properties| {
+                Value::Array(
+                    properties
+                        .keys()
+                        .cloned()
+                        .map(Value::String)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .unwrap_or_else(|| Value::Array(Vec::new()));
+        let required_fields = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        serde_json::json!({
+            "type": schema.get("type").cloned().unwrap_or(Value::Null),
+            "properties": property_names,
+            "required": required_fields,
+        })
     }
 
     fn assert_registry_characterization(registry: &ToolRegistry) {
@@ -384,6 +434,10 @@ mod tests {
             advertised_tool_names(server),
             characterized_live_registry_tool_names(registry)
         );
+        assert_eq!(
+            advertised_tool_names_in_order(server),
+            characterized_live_registry_tool_names_in_order(registry)
+        );
     }
 
     fn assert_stable_registry_schemas(registry: &ToolRegistry) {
@@ -398,6 +452,16 @@ mod tests {
             .filter(|tool| tool.output_schema.is_empty())
             .map(|tool| tool.name.clone())
             .collect();
+        let placeholder_input_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| is_placeholder_schema(&tool.input_schema))
+            .map(|tool| tool.name.clone())
+            .collect();
+        let placeholder_output_schema: Vec<_> = stable_tools
+            .iter()
+            .filter(|tool| is_placeholder_schema(&tool.output_schema))
+            .map(|tool| tool.name.clone())
+            .collect();
 
         assert!(
             missing_input_schema.is_empty(),
@@ -406,6 +470,14 @@ mod tests {
         assert!(
             missing_output_schema.is_empty(),
             "stable registry tools missing output schema: {missing_output_schema:?}"
+        );
+        assert!(
+            placeholder_input_schema.is_empty(),
+            "stable registry tools still use placeholder input schema: {placeholder_input_schema:?}"
+        );
+        assert!(
+            placeholder_output_schema.is_empty(),
+            "stable registry tools still use placeholder output schema: {placeholder_output_schema:?}"
         );
     }
 
@@ -439,6 +511,31 @@ mod tests {
         assert!(
             missing_input_schema.is_empty(),
             "stable live routes missing input schema: {missing_input_schema:?}"
+        );
+    }
+
+    fn assert_stable_live_route_input_schema_parity(
+        server: &NostrMcpServer,
+        registry: &ToolRegistry,
+    ) {
+        let mut mismatched_input_schema = Vec::new();
+
+        for tool in characterized_live_registry_tools(registry) {
+            let route = server
+                .tool_router
+                .map
+                .get(tool.name.as_str())
+                .expect("characterized tool route");
+            let route_schema = schema_contract_shape(route.attr.input_schema.as_ref());
+            let generated_schema = schema_contract_shape(&tool.input_schema);
+            if route_schema != generated_schema {
+                mismatched_input_schema.push(tool.name.clone());
+            }
+        }
+
+        assert!(
+            mismatched_input_schema.is_empty(),
+            "stable live route input schemas drifted from generated registry: {mismatched_input_schema:?}"
         );
     }
 
@@ -685,13 +782,17 @@ mod tests {
             .collect()
     }
 
-    fn advertised_tool_names(server: &NostrMcpServer) -> BTreeSet<String> {
+    fn advertised_tool_names_in_order(server: &NostrMcpServer) -> Vec<String> {
         let info = ServerHandler::get_info(server);
         let instructions = info.instructions.expect("server instructions");
         let raw = instructions
             .strip_prefix("Tools: ")
             .expect("tools prefix in instructions");
-        let advertised: Vec<String> = raw.split(',').map(|item| item.trim().to_string()).collect();
+        raw.split(',').map(|item| item.trim().to_string()).collect()
+    }
+
+    fn advertised_tool_names(server: &NostrMcpServer) -> BTreeSet<String> {
+        let advertised = advertised_tool_names_in_order(server);
         let unique: BTreeSet<String> = advertised.iter().cloned().collect();
         assert_eq!(
             unique.len(),
@@ -738,6 +839,13 @@ mod tests {
         let server = NostrMcpServer::new();
         let registry = canonical_tool_registry();
         assert_stable_live_route_metadata(&server, &registry);
+    }
+
+    #[test]
+    fn stable_live_tool_routes_match_generated_input_schema_contract_surface() {
+        let server = NostrMcpServer::new();
+        let registry = canonical_tool_registry();
+        assert_stable_live_route_input_schema_parity(&server, &registry);
     }
 
     #[test]
@@ -1123,6 +1231,158 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn golden_read_only_live_results_deserialize_to_typed_contracts() {
+        let (_dir, server) = golden_server("typed-read-only-contracts");
+
+        let valid_verify: VerifyResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_verify(Parameters(VerifyArgs {
+                    key: FIXTURE_PRIMARY_NSEC.to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert!(valid_verify.valid);
+
+        let invalid_verify: VerifyResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_verify(Parameters(VerifyArgs {
+                    key: FIXTURE_VERIFY_INVALID_KEY.to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert!(!invalid_verify.valid);
+
+        let derived: DerivePublicResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_derive_public(Parameters(DerivePublicArgs {
+                    private_key: FIXTURE_PRIMARY_NSEC.to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(derived.public_key_hex, FIXTURE_PRIMARY_PUBKEY_HEX);
+
+        import_primary_watch_only_key(&server).await;
+
+        let exported: ExportResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_export(Parameters(ExportArgs {
+                    label: None,
+                    format: ExportFormat::Bech32,
+                    include_private: false,
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(exported.label, FIXTURE_PRIMARY_LABEL);
+
+        let active: Option<KeyEntry> = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_get_active(Parameters(EmptyArgs::default()))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(active.expect("active key").label, FIXTURE_PRIMARY_LABEL);
+
+        let listed: KeysListResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_list(Parameters(EmptyArgs::default()))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(listed.count, 1);
+
+        server
+            .nostr_metadata_set(Parameters(SetMetadataArgs {
+                name: Some("alice".to_string()),
+                display_name: Some("Alice Example".to_string()),
+                about: Some("Grows citrus and coffee".to_string()),
+                picture: Some("https://example.com/alice.png".to_string()),
+                banner: None,
+                nip05: Some("alice@example.com".to_string()),
+                lud06: None,
+                lud16: Some("alice@ln.example.com".to_string()),
+                website: Some("https://example.com/alice".to_string()),
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        let stored_metadata: StoredMetadataResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_metadata_get(Parameters(EmptyArgs::default()))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(stored_metadata.pubkey, FIXTURE_PRIMARY_NPUB);
+
+        server
+            .nostr_follows_set(Parameters(SetFollowsArgs {
+                follows: vec![FollowEntry {
+                    pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                    relay_url: Some("wss://relay.example.com".to_string()),
+                    petname: Some("bob".to_string()),
+                }],
+                publish: Some(false),
+            }))
+            .await
+            .unwrap();
+        let stored_follows: FollowsLookupResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_follows_get(Parameters(EmptyArgs::default()))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(stored_follows.count, 1);
+
+        let emojis: Nip30ParseResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_events_parse_emojis(Parameters(Nip30ParseArgs {
+                    content: "farm time :tractor: :missing: :bad-emoji:".to_string(),
+                    tags: Some(vec![
+                        vec![
+                            "emoji".to_string(),
+                            "tractor".to_string(),
+                            "https://example.com/tractor.png".to_string(),
+                        ],
+                        vec![
+                            "emoji".to_string(),
+                            "bad-emoji".to_string(),
+                            "https://example.com/bad.png".to_string(),
+                        ],
+                    ]),
+                    kind: Some(1),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(emojis.tags.len(), 2);
+
+        let parsed_refs: ParseReferencesResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_events_parse_refs(Parameters(ParseReferencesArgs {
+                    content: format!(
+                        "see nostr:{FIXTURE_PRIMARY_NPUB} and nostr:{FIXTURE_PRIMARY_NSEC}"
+                    ),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(parsed_refs.references.len(), 2);
+    }
+
+    #[tokio::test]
     async fn golden_keys_import_watch_only() {
         let (_dir, server) = golden_server("keys-import-watch-only");
         let result =
@@ -1184,6 +1444,66 @@ mod tests {
             .await
             .unwrap();
         assert_tool_result_matches_golden("write_capable", "keys_remove", result, &[]);
+    }
+
+    #[tokio::test]
+    async fn golden_key_management_live_results_deserialize_to_typed_contracts() {
+        let (_dir, server) = golden_server("typed-key-management-contracts");
+
+        let imported_primary: KeyEntry = serde_json::from_value(tool_result_json(
+            import_fixture_key(&server, FIXTURE_PRIMARY_LABEL, FIXTURE_PRIMARY_NPUB, false).await,
+        ))
+        .unwrap();
+        assert_eq!(imported_primary.label, FIXTURE_PRIMARY_LABEL);
+        assert_eq!(imported_primary.public_key, FIXTURE_PRIMARY_NPUB);
+
+        let imported_secondary: KeyEntry = serde_json::from_value(tool_result_json(
+            import_fixture_key(
+                &server,
+                FIXTURE_SECONDARY_LABEL,
+                FIXTURE_SECONDARY_NPUB,
+                false,
+            )
+            .await,
+        ))
+        .unwrap();
+        assert_eq!(imported_secondary.label, FIXTURE_SECONDARY_LABEL);
+        assert_eq!(imported_secondary.public_key, FIXTURE_SECONDARY_NPUB);
+
+        let active: KeyEntry = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_set_active(Parameters(SetActiveArgs {
+                    label: FIXTURE_PRIMARY_LABEL.to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(active.label, FIXTURE_PRIMARY_LABEL);
+
+        let renamed: KeyEntry = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_rename_label(Parameters(RenameLabelArgs {
+                    from: Some(FIXTURE_PRIMARY_LABEL.to_string()),
+                    to: "orchard".to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(renamed.label, "orchard");
+        assert_eq!(renamed.public_key, FIXTURE_PRIMARY_NPUB);
+
+        let removed: KeyRemovalResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_keys_remove(Parameters(RemoveArgs {
+                    label: FIXTURE_SECONDARY_LABEL.to_string(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert!(removed.removed);
     }
 
     #[tokio::test]
@@ -1296,6 +1616,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn golden_profile_and_follows_live_results_deserialize_to_typed_contracts() {
+        let (_dir, server) = golden_server("typed-profile-follows-contracts");
+        import_primary_watch_only_key(&server).await;
+
+        let metadata: MetadataResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_metadata_set(Parameters(SetMetadataArgs {
+                    name: Some("alice".to_string()),
+                    display_name: Some("Alice Example".to_string()),
+                    about: Some("Grows citrus and coffee".to_string()),
+                    picture: Some("https://example.com/alice.png".to_string()),
+                    banner: None,
+                    nip05: Some("alice@example.com".to_string()),
+                    lud06: None,
+                    lud16: Some("alice@ln.example.com".to_string()),
+                    website: Some("https://example.com/alice".to_string()),
+                    publish: Some(false),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert!(metadata.saved);
+        assert!(!metadata.published);
+        assert!(metadata.event_id.is_none());
+
+        let set_follows: PublishFollowsResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_follows_set(Parameters(SetFollowsArgs {
+                    follows: vec![FollowEntry {
+                        pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                        relay_url: Some("wss://relay.example.com".to_string()),
+                        petname: Some("bob".to_string()),
+                    }],
+                    publish: Some(false),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert!(set_follows.saved);
+        assert!(!set_follows.published);
+
+        let added_follow: FollowsMutationResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_follows_add(Parameters(AddFollowArgs {
+                    pubkey: "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+                        .to_string(),
+                    relay_url: None,
+                    petname: Some("carol".to_string()),
+                    publish: Some(false),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(added_follow.count, 2);
+        assert!(added_follow.result.saved);
+        assert!(!added_follow.result.published);
+
+        let removed_follow: FollowsMutationResult = serde_json::from_value(tool_result_json(
+            server
+                .nostr_follows_remove(Parameters(RemoveFollowArgs {
+                    pubkey: FIXTURE_SECONDARY_PUBKEY_HEX.to_string(),
+                    publish: Some(false),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(removed_follow.count, 1);
+        assert!(removed_follow.result.saved);
+        assert!(!removed_follow.result.published);
+    }
+
+    #[tokio::test]
     async fn golden_events_create_text() {
         let (_dir, server) = golden_server("events-create-text");
         import_primary_watch_only_key(&server).await;
@@ -1346,6 +1742,66 @@ mod tests {
             &[],
             &[("/event_json", "/sig", REDACTED_SIGNATURE)],
         );
+    }
+
+    #[tokio::test]
+    async fn golden_event_authoring_live_results_deserialize_to_typed_contracts() {
+        let (_watch_dir, watch_server) = golden_server("typed-event-authoring-watch-only");
+        import_primary_watch_only_key(&watch_server).await;
+
+        let created: CreateTextResult = serde_json::from_value(tool_result_json(
+            watch_server
+                .nostr_events_create_text(Parameters(CreateTextArgs {
+                    content: "hello orchard".to_string(),
+                    tags: Some(vec![
+                        vec!["t".to_string(), "orchard".to_string()],
+                        vec!["subject".to_string(), "field-note".to_string()],
+                    ]),
+                    created_at: Some(1_700_000_000),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        let unsigned_event: Value = serde_json::from_str(&created.unsigned_event_json).unwrap();
+        assert_eq!(created.pubkey, FIXTURE_PRIMARY_PUBKEY_HEX);
+        assert_eq!(
+            unsigned_event["id"].as_str(),
+            Some(created.event_id.as_str())
+        );
+
+        let (_signing_dir, signing_server) = golden_server("typed-event-authoring-signing");
+        import_primary_signing_key(&signing_server).await;
+
+        let unsigned_to_sign: CreateTextResult = serde_json::from_value(tool_result_json(
+            signing_server
+                .nostr_events_create_text(Parameters(CreateTextArgs {
+                    content: "hello orchard".to_string(),
+                    tags: Some(vec![
+                        vec!["t".to_string(), "orchard".to_string()],
+                        vec!["subject".to_string(), "field-note".to_string()],
+                    ]),
+                    created_at: Some(1_700_000_000),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+
+        let signed: SignEventResult = serde_json::from_value(tool_result_json(
+            signing_server
+                .nostr_events_sign(Parameters(SignEventArgs {
+                    unsigned_event_json: unsigned_to_sign.unsigned_event_json.clone(),
+                }))
+                .await
+                .unwrap(),
+        ))
+        .unwrap();
+        let signed_event: Value = serde_json::from_str(&signed.event_json).unwrap();
+        assert_eq!(signed.pubkey, FIXTURE_PRIMARY_PUBKEY_HEX);
+        assert_eq!(signed.event_id, unsigned_to_sign.event_id);
+        assert_eq!(signed_event["id"].as_str(), Some(signed.event_id.as_str()));
+        assert!(signed_event["sig"].as_str().is_some());
     }
 
     #[tokio::test]
