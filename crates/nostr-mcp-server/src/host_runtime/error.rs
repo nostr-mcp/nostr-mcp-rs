@@ -8,6 +8,8 @@ pub enum HostRuntimeError {
     InvalidInput(String),
     #[error("operation denied: {0}")]
     OperationDenied(String),
+    #[error("operation timeout: {0}")]
+    OperationTimeout(String),
     #[error("io error: {0}")]
     Io(String),
     #[error("crypto error: {0}")]
@@ -32,6 +34,10 @@ impl HostRuntimeError {
 
     pub fn operation_denied<S: Into<String>>(msg: S) -> Self {
         Self::OperationDenied(msg.into())
+    }
+
+    pub fn operation_timeout<S: Into<String>>(msg: S) -> Self {
+        Self::OperationTimeout(msg.into())
     }
 
     pub fn crypto<S: Into<String>>(msg: S) -> Self {
@@ -66,6 +72,7 @@ mod tests {
         assert!(HostRuntimeError::invalid_input("bad input").is_invalid_input());
         assert!(!HostRuntimeError::io("disk").is_invalid_input());
         assert!(!HostRuntimeError::operation_denied("blocked").is_invalid_input());
+        assert!(!HostRuntimeError::operation_timeout("slow").is_invalid_input());
     }
 
     #[test]
@@ -78,6 +85,10 @@ mod tests {
         assert_eq!(
             HostRuntimeError::operation_denied("blocked").to_string(),
             "operation denied: blocked"
+        );
+        assert_eq!(
+            HostRuntimeError::operation_timeout("slow").to_string(),
+            "operation timeout: slow"
         );
         assert_eq!(
             HostRuntimeError::crypto("cipher").to_string(),

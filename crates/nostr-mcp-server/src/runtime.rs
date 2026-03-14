@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use nostr_mcp_policy::{
     AuthoringAction, CapabilityScope, EventKindScope, IdentityClass, RelayTargetScope,
@@ -25,10 +25,28 @@ impl NostrMcpPaths {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NostrMcpExecutionBudgets {
+    pub host_io_timeout: Duration,
+    pub network_timeout: Duration,
+    pub max_concurrent_network_ops: NonZeroUsize,
+}
+
+impl Default for NostrMcpExecutionBudgets {
+    fn default() -> Self {
+        Self {
+            host_io_timeout: Duration::from_secs(5),
+            network_timeout: Duration::from_secs(15),
+            max_concurrent_network_ops: NonZeroUsize::new(4).expect("non-zero network budget"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NostrMcpRuntime {
     pub server_name: String,
     pub keyring_service: String,
     pub paths: NostrMcpPaths,
+    pub execution_budgets: NostrMcpExecutionBudgets,
     pub signer_policy: SignerPolicy,
     pub allow_local_key_test_support: bool,
 }
@@ -43,6 +61,7 @@ impl NostrMcpRuntime {
             server_name: server_name.into(),
             keyring_service: keyring_service.into(),
             paths: NostrMcpPaths::from_root(config_root),
+            execution_budgets: NostrMcpExecutionBudgets::default(),
             signer_policy: default_runtime_signer_policy(),
             allow_local_key_test_support: false,
         }
@@ -53,6 +72,18 @@ impl NostrMcpRuntime {
             server_name: self.server_name.clone(),
             keyring_service: self.keyring_service.clone(),
             paths: NostrMcpPaths::from_root(config_root),
+            execution_budgets: self.execution_budgets.clone(),
+            signer_policy: self.signer_policy.clone(),
+            allow_local_key_test_support: self.allow_local_key_test_support,
+        }
+    }
+
+    pub fn with_execution_budgets(&self, execution_budgets: NostrMcpExecutionBudgets) -> Self {
+        Self {
+            server_name: self.server_name.clone(),
+            keyring_service: self.keyring_service.clone(),
+            paths: self.paths.clone(),
+            execution_budgets,
             signer_policy: self.signer_policy.clone(),
             allow_local_key_test_support: self.allow_local_key_test_support,
         }
@@ -63,6 +94,7 @@ impl NostrMcpRuntime {
             server_name: self.server_name.clone(),
             keyring_service: self.keyring_service.clone(),
             paths: self.paths.clone(),
+            execution_budgets: self.execution_budgets.clone(),
             signer_policy,
             allow_local_key_test_support: self.allow_local_key_test_support,
         }
@@ -73,6 +105,7 @@ impl NostrMcpRuntime {
             server_name: self.server_name.clone(),
             keyring_service: self.keyring_service.clone(),
             paths: self.paths.clone(),
+            execution_budgets: self.execution_budgets.clone(),
             signer_policy: self.signer_policy.clone(),
             allow_local_key_test_support,
         }
@@ -131,10 +164,11 @@ pub fn default_runtime_signer_policy() -> SignerPolicy {
 #[cfg(test)]
 mod tests {
     use super::{
-        NostrMcpPaths, NostrMcpRuntime, default_config_root, default_runtime_signer_policy,
+        NostrMcpExecutionBudgets, NostrMcpPaths, NostrMcpRuntime, default_config_root,
+        default_runtime_signer_policy,
     };
     use nostr_mcp_policy::default_signer_policy;
-    use std::path::PathBuf;
+    use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
     #[test]
     fn default_runtime_is_host_neutral() {
@@ -144,6 +178,10 @@ mod tests {
         assert_eq!(
             runtime.paths,
             NostrMcpPaths::from_root(default_config_root())
+        );
+        assert_eq!(
+            runtime.execution_budgets,
+            NostrMcpExecutionBudgets::default()
         );
         assert_eq!(runtime.signer_policy, default_runtime_signer_policy());
         assert!(!runtime.allow_local_key_test_support);
@@ -163,6 +201,7 @@ mod tests {
         assert_eq!(updated.server_name, "host");
         assert_eq!(updated.keyring_service, "service");
         assert_eq!(updated.paths.config_root, PathBuf::from("/tmp/custom"));
+        assert_eq!(updated.execution_budgets, runtime.execution_budgets);
         assert_eq!(updated.signer_policy, runtime.signer_policy);
         assert_eq!(
             updated.allow_local_key_test_support,
@@ -190,6 +229,7 @@ mod tests {
         assert_eq!(strict.server_name, runtime.server_name);
         assert_eq!(strict.keyring_service, runtime.keyring_service);
         assert_eq!(strict.paths, runtime.paths);
+        assert_eq!(strict.execution_budgets, runtime.execution_budgets);
         assert_eq!(strict.signer_policy, default_signer_policy());
         assert_eq!(
             strict.allow_local_key_test_support,
@@ -205,7 +245,30 @@ mod tests {
         assert_eq!(enabled.server_name, runtime.server_name);
         assert_eq!(enabled.keyring_service, runtime.keyring_service);
         assert_eq!(enabled.paths, runtime.paths);
+        assert_eq!(enabled.execution_budgets, runtime.execution_budgets);
         assert_eq!(enabled.signer_policy, runtime.signer_policy);
         assert!(enabled.allow_local_key_test_support);
+    }
+
+    #[test]
+    fn runtime_can_override_execution_budgets() {
+        let runtime = NostrMcpRuntime::default();
+        let budgets = NostrMcpExecutionBudgets {
+            host_io_timeout: Duration::from_millis(250),
+            network_timeout: Duration::from_secs(2),
+            max_concurrent_network_ops: NonZeroUsize::new(2).expect("non-zero permits"),
+        };
+
+        let updated = runtime.with_execution_budgets(budgets.clone());
+
+        assert_eq!(updated.server_name, runtime.server_name);
+        assert_eq!(updated.keyring_service, runtime.keyring_service);
+        assert_eq!(updated.paths, runtime.paths);
+        assert_eq!(updated.execution_budgets, budgets);
+        assert_eq!(updated.signer_policy, runtime.signer_policy);
+        assert_eq!(
+            updated.allow_local_key_test_support,
+            runtime.allow_local_key_test_support
+        );
     }
 }

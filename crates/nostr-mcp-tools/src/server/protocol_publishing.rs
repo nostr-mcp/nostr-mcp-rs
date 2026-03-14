@@ -36,9 +36,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = ProtocolPublishingService::post_recommendation(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_handlers_recommend", async {
+                ProtocolPublishingService::post_recommendation(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -59,9 +63,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = ProtocolPublishingService::post_handler_info(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_handlers_register", async {
+                ProtocolPublishingService::post_handler_info(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -82,9 +90,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = ProtocolPublishingService::post_badge_definition(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_badges_define", async {
+                ProtocolPublishingService::post_badge_definition(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -105,9 +117,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = ProtocolPublishingService::post_badge_award(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_badges_award", async {
+                ProtocolPublishingService::post_badge_award(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -128,9 +144,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.protocol_publishing_client().await?;
-        let result = ProtocolPublishingService::post_profile_badges(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_badges_set_profile", async {
+                ProtocolPublishingService::post_profile_badges(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

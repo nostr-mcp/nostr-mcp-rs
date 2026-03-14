@@ -36,9 +36,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::put_user(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_put_user", async {
+                GroupModerationService::put_user(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -59,9 +63,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::remove_user(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_remove_user", async {
+                GroupModerationService::remove_user(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -82,9 +90,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::edit_metadata(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_edit_metadata", async {
+                GroupModerationService::edit_metadata(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -105,9 +117,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::delete_event(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_delete_event", async {
+                GroupModerationService::delete_event(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -128,9 +144,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::create_group(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_create_group", async {
+                GroupModerationService::create_group(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -151,9 +171,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::delete_group(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_delete_group", async {
+                GroupModerationService::delete_group(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -174,9 +198,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::create_invite(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_create_invite", async {
+                GroupModerationService::create_invite(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -197,9 +225,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::join(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_join", async {
+                GroupModerationService::join(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -220,9 +252,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.group_client().await?;
-        let result = GroupModerationService::leave(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_groups_leave", async {
+                GroupModerationService::leave(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

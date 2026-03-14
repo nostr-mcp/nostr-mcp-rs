@@ -66,9 +66,13 @@ impl NostrMcpServer {
         let filter = EventFilterService::preset_filter(active_client.active_pubkey, &args)
             .map_err(core_error)?;
 
-        let events = list_events(&active_client.client, filter, args.timeout())
-            .await
-            .map_err(core_error)?;
+        let events = self
+            .with_network_budget("nostr_events_list", async {
+                list_events(&active_client.client, filter, args.timeout())
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         event_items_result(events)
     }
 
@@ -80,9 +84,13 @@ impl NostrMcpServer {
         Parameters(args): Parameters<LongFormListArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let active_client = self.event_query_client().await?;
-        let events = list_long_form_events(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let events = self
+            .with_network_budget("nostr_events_list_long_form", async {
+                list_long_form_events(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         event_items_result(events)
     }
 
@@ -106,9 +114,13 @@ impl NostrMcpServer {
         Parameters(args): Parameters<QueryEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let active_client = self.event_query_client().await?;
-        let events = query_events(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let events = self
+            .with_network_budget("nostr_events_query", async {
+                query_events(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         event_items_result(events)
     }
 
@@ -120,9 +132,13 @@ impl NostrMcpServer {
         Parameters(args): Parameters<SearchEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let active_client = self.event_query_client().await?;
-        let events = search_events(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let events = self
+            .with_network_budget("nostr_events_search", async {
+                search_events(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         event_items_result(events)
     }
 
@@ -134,13 +150,17 @@ impl NostrMcpServer {
         Parameters(args): Parameters<GetPollResultsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let active_client = self.event_query_client().await?;
-        let results = get_poll_results(
-            &active_client.client,
-            &args.poll_event_id,
-            args.timeout_secs.unwrap_or(10),
-        )
-        .await
-        .map_err(core_error)?;
+        let results = self
+            .with_network_budget("nostr_events_get_poll_results", async {
+                get_poll_results(
+                    &active_client.client,
+                    &args.poll_event_id,
+                    args.timeout_secs.unwrap_or(10),
+                )
+                .await
+                .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(results))?;
         Ok(CallToolResult::success(vec![content]))
     }

@@ -115,9 +115,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_text(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_text", async {
+                EventAuthoringService::post_text(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -138,9 +142,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_anonymous(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_anonymous", async {
+                EventAuthoringService::post_anonymous(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -161,9 +169,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::repost(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_repost", async {
+                EventAuthoringService::repost(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -184,9 +196,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::delete(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_delete", async {
+                EventAuthoringService::delete(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -207,9 +223,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_thread(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_thread", async {
+                EventAuthoringService::post_thread(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -230,9 +250,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_long_form(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_long_form", async {
+                EventAuthoringService::post_long_form(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -253,9 +277,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_group_chat(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_group_chat", async {
+                EventAuthoringService::post_group_chat(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -276,9 +304,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_reaction(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_reaction", async {
+                EventAuthoringService::post_reaction(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -299,9 +331,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::publish_signed(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_publish_signed", async {
+                EventAuthoringService::publish_signed(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -327,9 +363,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_reply(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_reply", async {
+                EventAuthoringService::post_reply(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -350,9 +390,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::post_comment(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_post_comment", async {
+                EventAuthoringService::post_comment(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -373,9 +417,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::create_poll(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_create_poll", async {
+                EventAuthoringService::create_poll(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -396,9 +444,13 @@ impl NostrMcpServer {
         ))
         .await?;
         let active_client = self.authoring_client().await?;
-        let result = EventAuthoringService::vote_poll(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_events_vote_poll", async {
+                EventAuthoringService::vote_poll(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

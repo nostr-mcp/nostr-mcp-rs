@@ -77,9 +77,12 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            ProfileService::publish(&active_client.client, &profile)
-                .await
-                .map_err(core_error)?
+            self.with_network_budget("nostr_metadata_set", async {
+                ProfileService::publish(&active_client.client, &profile)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?
         } else {
             MetadataResult {
                 saved: true,
@@ -142,9 +145,13 @@ impl NostrMcpServer {
             active_client.active_pubkey
         };
 
-        let metadata = ProfileService::fetch_metadata(&active_client.client, &target_pubkey)
-            .await
-            .map_err(core_error)?;
+        let metadata = self
+            .with_network_budget("nostr_metadata_fetch", async {
+                ProfileService::fetch_metadata(&active_client.client, &target_pubkey)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
 
         let content = Content::json(serde_json::json!(FetchedMetadataResult {
             pubkey: target_pubkey.to_bech32().unwrap(),
@@ -164,9 +171,13 @@ impl NostrMcpServer {
         let settings_store = self.settings_store().await?;
         let active_client = self.ensure_client_from(keystore, settings_store).await?;
 
-        let result = ProfileService::fetch_profile(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_profiles_get", async {
+                ProfileService::fetch_profile(&active_client.client, args)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

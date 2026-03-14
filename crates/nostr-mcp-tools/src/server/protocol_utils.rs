@@ -19,7 +19,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip05ResolveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let result = resolve_nip05(args).await.map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_nip05_resolve", async {
+                resolve_nip05(args).await.map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }
@@ -31,7 +35,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<Nip05VerifyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let result = verify_nip05(args).await.map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_nip05_verify", async {
+                verify_nip05(args).await.map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

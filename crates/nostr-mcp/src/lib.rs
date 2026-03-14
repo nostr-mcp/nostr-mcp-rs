@@ -42,8 +42,9 @@ pub mod prelude {
 
 #[cfg(feature = "server")]
 pub use nostr_mcp_server::{
-    HOST_LOCAL_TOOL_NAMES, NostrMcpPaths, NostrMcpRuntime, NostrMcpServerCatalog,
-    NostrMcpServerServices, default_config_root, default_runtime_signer_policy, is_host_local_tool,
+    HOST_LOCAL_TOOL_NAMES, NostrMcpExecutionBudgets, NostrMcpPaths, NostrMcpRuntime,
+    NostrMcpServerCatalog, NostrMcpServerServices, default_config_root,
+    default_runtime_signer_policy, is_host_local_tool,
 };
 #[cfg(feature = "server")]
 pub use nostr_mcp_tools::NostrMcpServer;

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use crate::host_runtime::client::{ActiveClient, ClientStore};
 use crate::host_runtime::error::{HostRuntimeError, HostRuntimeResult};
@@ -15,7 +15,10 @@ use nostr_mcp_policy::{
     AuthoringAction, CapabilityScope, IdentityClass, PolicyDecision, PolicyDecisionEffect,
     PolicyRequest, SignerBackend, SignerMethod, SignerPolicy,
 };
-use tokio::sync::OnceCell;
+use tokio::{
+    sync::{OnceCell, OwnedSemaphorePermit, Semaphore},
+    time::timeout,
+};
 
 fn secret_store(runtime: &NostrMcpRuntime) -> Arc<dyn SecretStore> {
     #[cfg(feature = "keyring")]
@@ -73,11 +76,15 @@ pub struct NostrMcpServerServices {
     runtime: NostrMcpRuntime,
     stores: OnceCell<ServerStores>,
     client_store: ClientStore,
+    network_budget: Arc<Semaphore>,
 }
 
 impl NostrMcpServerServices {
     pub fn new(runtime: NostrMcpRuntime) -> Self {
         Self {
+            network_budget: Arc::new(Semaphore::new(
+                runtime.execution_budgets.max_concurrent_network_ops.get(),
+            )),
             runtime,
             stores: OnceCell::const_new(),
             client_store: ClientStore::new(),
@@ -89,7 +96,8 @@ impl NostrMcpServerServices {
     }
 
     pub async fn initialize(&self) -> HostRuntimeResult<()> {
-        self.stores().await?;
+        self.run_host_operation("initialize_server_state", self.stores())
+            .await?;
         Ok(())
     }
 
@@ -193,12 +201,16 @@ impl NostrMcpServerServices {
     }
 
     pub async fn keystore(&self) -> HostRuntimeResult<Arc<KeyStore>> {
-        let stores = self.stores().await?;
+        let stores = self
+            .run_host_operation("load_keystore", self.stores())
+            .await?;
         Ok(stores.keystore.clone())
     }
 
     pub async fn settings_store(&self) -> HostRuntimeResult<Arc<SettingsStore>> {
-        let stores = self.stores().await?;
+        let stores = self
+            .run_host_operation("load_settings_store", self.stores())
+            .await?;
         Ok(stores.settings_store.clone())
     }
 
@@ -216,20 +228,54 @@ impl NostrMcpServerServices {
         keystore: Arc<KeyStore>,
         settings_store: Arc<SettingsStore>,
     ) -> HostRuntimeResult<ActiveClient> {
-        self.client_store
-            .ensure_client(keystore, settings_store)
-            .await
+        self.run_host_operation("ensure_active_client", async {
+            self.client_store
+                .ensure_client(keystore, settings_store)
+                .await
+        })
+        .await
     }
 
     pub async fn reset_client(&self) -> HostRuntimeResult<()> {
-        self.client_store.reset().await
+        self.run_host_operation("reset_client_cache", self.client_store.reset())
+            .await
     }
 
     #[cfg(test)]
     pub async fn client(&self) -> HostRuntimeResult<ActiveClient> {
-        let stores = self.stores().await?;
+        let stores = self
+            .run_host_operation("load_client_state", self.stores())
+            .await?;
         self.ensure_client_from(stores.keystore.clone(), stores.settings_store.clone())
             .await
+    }
+
+    pub async fn acquire_network_permit(&self) -> HostRuntimeResult<OwnedSemaphorePermit> {
+        self.network_budget
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| {
+                HostRuntimeError::operation_denied("network execution budget is unavailable")
+            })
+    }
+
+    pub async fn run_host_operation<T, F>(
+        &self,
+        operation_name: &'static str,
+        future: F,
+    ) -> HostRuntimeResult<T>
+    where
+        F: Future<Output = HostRuntimeResult<T>>,
+    {
+        let timeout_duration = self.runtime.execution_budgets.host_io_timeout;
+        match timeout(timeout_duration, future).await {
+            Ok(result) => result,
+            Err(_) => Err(HostRuntimeError::operation_timeout(format!(
+                "{operation_name} exceeded runtime budget of {} ms",
+                timeout_duration.as_millis()
+            ))),
+        }
     }
 
     async fn stores(&self) -> HostRuntimeResult<&ServerStores> {
@@ -247,5 +293,64 @@ impl NostrMcpServerServices {
                 }
             })
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NostrMcpServerServices;
+    use crate::runtime::{NostrMcpExecutionBudgets, NostrMcpRuntime};
+    use std::{num::NonZeroUsize, time::Duration};
+    use tempfile::tempdir;
+    use tokio::time::{sleep, timeout};
+
+    #[tokio::test]
+    async fn host_runtime_budget_times_out_overlong_operations() {
+        let dir = tempdir().unwrap();
+        let runtime = NostrMcpRuntime::new("budget-host", "budget-host", dir.path().to_path_buf())
+            .with_execution_budgets(NostrMcpExecutionBudgets {
+                host_io_timeout: Duration::from_millis(10),
+                network_timeout: Duration::from_millis(50),
+                max_concurrent_network_ops: NonZeroUsize::new(1).expect("non-zero permits"),
+            });
+        let services = NostrMcpServerServices::new(runtime);
+
+        let err = services
+            .run_host_operation("slow_host_operation", async {
+                sleep(Duration::from_millis(25)).await;
+                Ok::<(), _>(())
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "operation timeout: slow_host_operation exceeded runtime budget of 10 ms"
+        );
+    }
+
+    #[tokio::test]
+    async fn network_execution_budget_limits_concurrency() {
+        let dir = tempdir().unwrap();
+        let runtime =
+            NostrMcpRuntime::new("budget-network", "budget-network", dir.path().to_path_buf())
+                .with_execution_budgets(NostrMcpExecutionBudgets {
+                    host_io_timeout: Duration::from_secs(1),
+                    network_timeout: Duration::from_secs(1),
+                    max_concurrent_network_ops: NonZeroUsize::new(1).expect("non-zero permits"),
+                });
+        let services = NostrMcpServerServices::new(runtime);
+
+        let first = services.acquire_network_permit().await.unwrap();
+        assert!(
+            timeout(Duration::from_millis(10), services.acquire_network_permit())
+                .await
+                .is_err()
+        );
+
+        drop(first);
+
+        let second = services.acquire_network_permit().await.unwrap();
+        drop(second);
     }
 }

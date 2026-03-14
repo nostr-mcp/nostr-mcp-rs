@@ -56,23 +56,26 @@ impl NostrMcpServer {
         let active_client = self
             .ensure_client_from(keystore, settings_store.clone())
             .await?;
-        set_relays(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        self.with_network_budget("nostr_relays_set", async {
+            set_relays(&active_client.client, args)
+                .await
+                .map_err(core_error)?;
 
-        let relay_urls = get_relay_urls(&active_client.client).await;
-        self.persist_relay_settings(
-            settings_store,
-            active_client.active_pubkey.to_hex(),
-            relay_urls,
-        )
-        .await?;
+            let relay_urls = get_relay_urls(&active_client.client).await;
+            self.persist_relay_settings(
+                settings_store,
+                active_client.active_pubkey.to_hex(),
+                relay_urls,
+            )
+            .await?;
 
-        let rows = list_relays(&active_client.client)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
-        Ok(CallToolResult::success(vec![content]))
+            let rows = list_relays(&active_client.client)
+                .await
+                .map_err(core_error)?;
+            let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
+            Ok(CallToolResult::success(vec![content]))
+        })
+        .await
     }
 
     #[tool(
@@ -87,14 +90,17 @@ impl NostrMcpServer {
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
         let active_client = self.ensure_client_from(keystore, settings_store).await?;
-        connect_relays(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
-        let rows = list_relays(&active_client.client)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
-        Ok(CallToolResult::success(vec![content]))
+        self.with_network_budget("nostr_relays_connect", async {
+            connect_relays(&active_client.client, args)
+                .await
+                .map_err(core_error)?;
+            let rows = list_relays(&active_client.client)
+                .await
+                .map_err(core_error)?;
+            let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
+            Ok(CallToolResult::success(vec![content]))
+        })
+        .await
     }
 
     #[tool(
@@ -111,23 +117,26 @@ impl NostrMcpServer {
         let active_client = self
             .ensure_client_from(keystore, settings_store.clone())
             .await?;
-        disconnect_relays(&active_client.client, args)
-            .await
-            .map_err(core_error)?;
+        self.with_network_budget("nostr_relays_disconnect", async {
+            disconnect_relays(&active_client.client, args)
+                .await
+                .map_err(core_error)?;
 
-        let relay_urls = get_relay_urls(&active_client.client).await;
-        self.persist_relay_settings(
-            settings_store,
-            active_client.active_pubkey.to_hex(),
-            relay_urls,
-        )
-        .await?;
+            let relay_urls = get_relay_urls(&active_client.client).await;
+            self.persist_relay_settings(
+                settings_store,
+                active_client.active_pubkey.to_hex(),
+                relay_urls,
+            )
+            .await?;
 
-        let rows = list_relays(&active_client.client)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
-        Ok(CallToolResult::success(vec![content]))
+            let rows = list_relays(&active_client.client)
+                .await
+                .map_err(core_error)?;
+            let content = Content::json(serde_json::json!(RelayListResult { relays: rows }))?;
+            Ok(CallToolResult::success(vec![content]))
+        })
+        .await
     }
 
     #[tool(description = "List relay status and flags")]
@@ -138,17 +147,20 @@ impl NostrMcpServer {
         let keystore = self.keystore().await?;
         let settings_store = self.settings_store().await?;
         let active_client = self.ensure_client_from(keystore, settings_store).await?;
-        let rows = list_relays(&active_client.client)
-            .await
-            .map_err(core_error)?;
-        let summary = status_summary(&active_client.client)
-            .await
-            .map_err(core_error)?;
-        let content = Content::json(serde_json::json!(RelayStatusResult {
-            summary,
-            relays: rows,
-        }))?;
-        Ok(CallToolResult::success(vec![content]))
+        self.with_network_budget("nostr_relays_status", async {
+            let rows = list_relays(&active_client.client)
+                .await
+                .map_err(core_error)?;
+            let summary = status_summary(&active_client.client)
+                .await
+                .map_err(core_error)?;
+            let content = Content::json(serde_json::json!(RelayStatusResult {
+                summary,
+                relays: rows,
+            }))?;
+            Ok(CallToolResult::success(vec![content]))
+        })
+        .await
     }
 
     #[tool(
@@ -158,7 +170,11 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<RelayInfoArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let result = fetch_relay_info(args).await.map_err(core_error)?;
+        let result = self
+            .with_network_budget("nostr_relays_get_info", async {
+                fetch_relay_info(args).await.map_err(core_error)
+            })
+            .await?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
     }

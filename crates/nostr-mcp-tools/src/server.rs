@@ -29,7 +29,12 @@ use rmcp::{
     model::{ErrorData, Implementation, ProtocolVersion, ServerCapabilities, ServerInfo},
     tool_handler, tool_router,
 };
-use std::sync::Arc;
+use std::{
+    future::Future,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{sync::OwnedSemaphorePermit, time::timeout};
 
 fn core_error(err: CoreError) -> ErrorData {
     if let CoreError::InvalidInput(msg) = err {
@@ -75,6 +80,21 @@ fn server_service_error(err: NostrMcpServerServiceError) -> ErrorData {
     }
 }
 
+fn runtime_budget_timeout_error(
+    operation_name: &'static str,
+    timeout_duration: Duration,
+) -> ErrorData {
+    ErrorData::internal_error(
+        format!("{operation_name} exceeded runtime budget"),
+        Some(serde_json::json!({
+            "reason": "runtime_budget_timeout",
+            "operation": operation_name,
+            "timeout_ms": u64::try_from(timeout_duration.as_millis()).unwrap_or(u64::MAX),
+            "canceled": true,
+        })),
+    )
+}
+
 #[derive(Clone)]
 pub struct NostrMcpServer {
     tool_router: ToolRouter<Self>,
@@ -89,6 +109,79 @@ impl NostrMcpServer {
 
     pub async fn initialize(&self) -> HostRuntimeResult<()> {
         self.services.initialize().await
+    }
+
+    async fn with_execution_budget<T, F>(
+        &self,
+        operation_name: &'static str,
+        timeout_duration: Duration,
+        permit: Option<OwnedSemaphorePermit>,
+        future: F,
+    ) -> Result<T, ErrorData>
+    where
+        F: Future<Output = Result<T, ErrorData>>,
+    {
+        match timeout(timeout_duration, async move {
+            let _permit = permit;
+            future.await
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(runtime_budget_timeout_error(
+                operation_name,
+                timeout_duration,
+            )),
+        }
+    }
+
+    async fn with_host_budget<T, F>(
+        &self,
+        operation_name: &'static str,
+        future: F,
+    ) -> Result<T, ErrorData>
+    where
+        F: Future<Output = Result<T, ErrorData>>,
+    {
+        self.with_execution_budget(
+            operation_name,
+            self.runtime().execution_budgets.host_io_timeout,
+            None,
+            future,
+        )
+        .await
+    }
+
+    async fn with_network_budget<T, F>(
+        &self,
+        operation_name: &'static str,
+        future: F,
+    ) -> Result<T, ErrorData>
+    where
+        F: Future<Output = Result<T, ErrorData>>,
+    {
+        let timeout_duration = self.runtime().execution_budgets.network_timeout;
+        let started = Instant::now();
+        let permit = match timeout(timeout_duration, self.services.acquire_network_permit()).await {
+            Ok(Ok(permit)) => permit,
+            Ok(Err(err)) => return Err(host_runtime_error(err)),
+            Err(_) => {
+                return Err(runtime_budget_timeout_error(
+                    operation_name,
+                    timeout_duration,
+                ));
+            }
+        };
+        let elapsed = started.elapsed();
+        let remaining = timeout_duration.checked_sub(elapsed).unwrap_or_default();
+        if remaining.is_zero() {
+            return Err(runtime_budget_timeout_error(
+                operation_name,
+                timeout_duration,
+            ));
+        }
+        self.with_execution_budget(operation_name, remaining, Some(permit), future)
+            .await
     }
 
     fn capability_request(&self, capability_scope: CapabilityScope) -> PolicyRequest {
@@ -129,7 +222,11 @@ impl NostrMcpServer {
     }
 
     async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
-        self.services.keystore().await.map_err(host_runtime_error)
+        let services = self.services.clone();
+        self.with_host_budget("load_keystore", async move {
+            services.keystore().await.map_err(host_runtime_error)
+        })
+        .await
     }
 
     fn ensure_local_key_test_support(&self) -> Result<(), ErrorData> {
@@ -139,10 +236,11 @@ impl NostrMcpServer {
     }
 
     async fn settings_store(&self) -> Result<Arc<SettingsStore>, ErrorData> {
-        self.services
-            .settings_store()
-            .await
-            .map_err(host_runtime_error)
+        let services = self.services.clone();
+        self.with_host_budget("load_settings_store", async move {
+            services.settings_store().await.map_err(host_runtime_error)
+        })
+        .await
     }
 
     async fn ensure_client_from(
@@ -150,17 +248,22 @@ impl NostrMcpServer {
         keystore: Arc<KeyStore>,
         settings_store: Arc<SettingsStore>,
     ) -> Result<ActiveClient, ErrorData> {
-        self.services
-            .ensure_client_from(keystore, settings_store)
-            .await
-            .map_err(host_runtime_error)
+        let services = self.services.clone();
+        self.with_host_budget("ensure_active_client", async move {
+            services
+                .ensure_client_from(keystore, settings_store)
+                .await
+                .map_err(host_runtime_error)
+        })
+        .await
     }
 
     async fn reset_client(&self) -> Result<(), ErrorData> {
-        self.services
-            .reset_client()
-            .await
-            .map_err(host_runtime_error)
+        let services = self.services.clone();
+        self.with_host_budget("reset_client_cache", async move {
+            services.reset_client().await.map_err(host_runtime_error)
+        })
+        .await
     }
 
     #[cfg(test)]
@@ -219,7 +322,10 @@ mod tests {
     use nostr_mcp_policy::{
         CapabilityScope, RelayTargetScope, SignerBackend, SignerPolicy, default_signer_policy,
     };
-    use nostr_mcp_server::{default_runtime_signer_policy, host_runtime::error::HostRuntimeError};
+    use nostr_mcp_server::{
+        NostrMcpExecutionBudgets, default_runtime_signer_policy,
+        host_runtime::error::HostRuntimeError,
+    };
     use nostr_mcp_types::common::EmptyArgs;
     use nostr_mcp_types::follows::{
         AddFollowArgs, FollowsLookupResult, FollowsMutationResult, PublishFollowsResult,
@@ -247,9 +353,12 @@ mod tests {
     use rmcp::model::{CallToolResult, ErrorCode, ErrorData};
     use serde_json::Value;
     use std::collections::BTreeSet;
+    use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::Duration;
     use tempfile::tempdir;
+    use tokio::time::sleep;
 
     const CHARACTERIZED_STABLE_TOOL_COUNT: usize = 66;
     const CHARACTERIZED_GENERIC_STABLE_TOOL_COUNT: usize = 64;
@@ -719,6 +828,21 @@ mod tests {
         (dir, NostrMcpServer::with_runtime(runtime))
     }
 
+    fn budgeted_server(
+        name: &str,
+        execution_budgets: NostrMcpExecutionBudgets,
+    ) -> (tempfile::TempDir, NostrMcpServer) {
+        let dir = tempdir().unwrap();
+        let runtime = NostrMcpRuntime::new(
+            format!("budgeted-{name}"),
+            format!("budgeted-service-{name}"),
+            dir.path().to_path_buf(),
+        )
+        .with_local_key_test_support(true)
+        .with_execution_budgets(execution_budgets);
+        (dir, NostrMcpServer::with_runtime(runtime))
+    }
+
     fn server_with_policy(
         name: &str,
         config_root: PathBuf,
@@ -912,6 +1036,85 @@ mod tests {
         let err = host_runtime_error(HostRuntimeError::operation_denied("blocked"));
         assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
         assert_eq!(err.message.as_ref(), "blocked");
+    }
+
+    #[tokio::test]
+    async fn host_budget_timeout_surfaces_internal_error_with_cancellation_marker() {
+        let (_dir, server) = budgeted_server(
+            "host-timeout",
+            NostrMcpExecutionBudgets {
+                host_io_timeout: Duration::from_millis(10),
+                network_timeout: Duration::from_secs(1),
+                max_concurrent_network_ops: NonZeroUsize::new(1).expect("non-zero permits"),
+            },
+        );
+
+        let err = server
+            .with_host_budget("test_host_budget", async {
+                sleep(Duration::from_millis(25)).await;
+                Ok::<(), ErrorData>(())
+            })
+            .await
+            .expect_err("host budget should time out");
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(
+            err.message.as_ref(),
+            "test_host_budget exceeded runtime budget"
+        );
+        assert_eq!(
+            err.data
+                .as_ref()
+                .and_then(|value| value.get("reason"))
+                .and_then(Value::as_str),
+            Some("runtime_budget_timeout")
+        );
+        assert_eq!(
+            err.data
+                .as_ref()
+                .and_then(|value| value.get("canceled"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn network_budget_exhaustion_surfaces_internal_error_with_cancellation_marker() {
+        let (_dir, server) = budgeted_server(
+            "network-timeout",
+            NostrMcpExecutionBudgets {
+                host_io_timeout: Duration::from_secs(1),
+                network_timeout: Duration::from_millis(10),
+                max_concurrent_network_ops: NonZeroUsize::new(1).expect("non-zero permits"),
+            },
+        );
+
+        let held_permit = server.services.acquire_network_permit().await.unwrap();
+        let err = server
+            .with_network_budget("test_network_budget", async { Ok::<(), ErrorData>(()) })
+            .await
+            .expect_err("network budget should time out waiting for permit");
+        drop(held_permit);
+
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert_eq!(
+            err.message.as_ref(),
+            "test_network_budget exceeded runtime budget"
+        );
+        assert_eq!(
+            err.data
+                .as_ref()
+                .and_then(|value| value.get("reason"))
+                .and_then(Value::as_str),
+            Some("runtime_budget_timeout")
+        );
+        assert_eq!(
+            err.data
+                .as_ref()
+                .and_then(|value| value.get("canceled"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
     }
 
     #[tokio::test]

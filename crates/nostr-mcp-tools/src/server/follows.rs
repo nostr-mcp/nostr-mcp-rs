@@ -90,9 +90,12 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            FollowsService::publish(&active_client.client, &args.follows)
-                .await
-                .map_err(core_error)?
+            self.with_network_budget("nostr_follows_set", async {
+                FollowsService::publish(&active_client.client, &args.follows)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?
         } else {
             Self::unpublished_follow_result()
         };
@@ -142,9 +145,13 @@ impl NostrMcpServer {
             .ensure_client_from(keystore, settings_store.clone())
             .await?;
 
-        let follows = FollowsService::fetch(&active_client.client, &active_client.active_pubkey)
-            .await
-            .map_err(core_error)?;
+        let follows = self
+            .with_network_budget("nostr_follows_fetch", async {
+                FollowsService::fetch(&active_client.client, &active_client.active_pubkey)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?;
 
         self.persist_follow_settings(
             settings_store,
@@ -214,9 +221,12 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            FollowsService::publish(&active_client.client, &follows)
-                .await
-                .map_err(core_error)?
+            self.with_network_budget("nostr_follows_add", async {
+                FollowsService::publish(&active_client.client, &follows)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?
         } else {
             Self::unpublished_follow_result()
         };
@@ -279,9 +289,12 @@ impl NostrMcpServer {
 
         let result = if args.publish.unwrap_or(true) {
             let active_client = self.ensure_client_from(keystore, settings_store).await?;
-            FollowsService::publish(&active_client.client, &follows)
-                .await
-                .map_err(core_error)?
+            self.with_network_budget("nostr_follows_remove", async {
+                FollowsService::publish(&active_client.client, &follows)
+                    .await
+                    .map_err(core_error)
+            })
+            .await?
         } else {
             Self::unpublished_follow_result()
         };
