@@ -814,6 +814,7 @@ mod tests {
             format!("golden-service-{name}"),
             dir.path().to_path_buf(),
         )
+        .with_signer_policy(local_key_test_signer_policy())
         .with_local_key_test_support(true);
         (dir, NostrMcpServer::with_runtime(runtime))
     }
@@ -838,6 +839,7 @@ mod tests {
             format!("budgeted-service-{name}"),
             dir.path().to_path_buf(),
         )
+        .with_signer_policy(local_key_test_signer_policy())
         .with_local_key_test_support(true)
         .with_execution_budgets(execution_budgets);
         (dir, NostrMcpServer::with_runtime(runtime))
@@ -860,6 +862,13 @@ mod tests {
 
     fn policy_reason(err: &ErrorData) -> Option<&str> {
         err.data.as_ref()?.get("reason")?.as_str()
+    }
+
+    fn local_key_test_signer_policy() -> SignerPolicy {
+        let mut policy = default_runtime_signer_policy();
+        policy.identity_class = nostr_mcp_policy::IdentityClass::SignerBacked;
+        policy.signer_backend = SignerBackend::LocalTestOnly;
+        policy
     }
 
     async fn import_fixture_key(
@@ -1188,7 +1197,7 @@ mod tests {
             .expect_err("production runtime should deny local key generation");
 
         assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+        assert_eq!(policy_reason(&err), Some("signer_backend_mismatch"));
     }
 
     #[tokio::test]
@@ -1205,7 +1214,7 @@ mod tests {
             .expect_err("production runtime should deny local secret import");
 
         assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+        assert_eq!(policy_reason(&err), Some("signer_backend_mismatch"));
     }
 
     #[tokio::test]
@@ -1222,7 +1231,7 @@ mod tests {
             .expect_err("production runtime should deny private key export");
 
         assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+        assert_eq!(policy_reason(&err), Some("signer_backend_mismatch"));
     }
 
     #[tokio::test]
@@ -1236,7 +1245,7 @@ mod tests {
             .expect_err("production runtime should deny private key derivation");
 
         assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+        assert_eq!(policy_reason(&err), Some("signer_backend_mismatch"));
     }
 
     #[tokio::test]
@@ -1253,10 +1262,7 @@ mod tests {
             .expect_err("production runtime should deny nip44 encrypt");
 
         assert_eq!(encrypt_err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(
-            encrypt_err.message.as_ref(),
-            "local key test support is disabled"
-        );
+        assert_eq!(policy_reason(&encrypt_err), Some("signer_backend_mismatch"));
 
         let decrypt_err = server
             .nostr_nip44_decrypt(Parameters(Nip44DecryptArgs {
@@ -1268,10 +1274,36 @@ mod tests {
             .expect_err("production runtime should deny nip44 decrypt");
 
         assert_eq!(decrypt_err.code, ErrorCode::INVALID_REQUEST);
-        assert_eq!(
-            decrypt_err.message.as_ref(),
-            "local key test support is disabled"
+        assert_eq!(policy_reason(&decrypt_err), Some("signer_backend_mismatch"));
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_signing_without_remote_signer_session() {
+        let (_dir, server) = production_server("remote-signing-session-deny");
+        import_primary_watch_only_key(&server).await;
+
+        let unsigned = tool_result_json(
+            server
+                .nostr_events_create_text(Parameters(CreateTextArgs {
+                    content: "hello orchard".to_string(),
+                    tags: None,
+                    created_at: Some(1_700_000_000),
+                }))
+                .await
+                .expect("unsigned event with active watch-only identity"),
         );
+        let err = server
+            .nostr_events_sign(Parameters(SignEventArgs {
+                unsigned_event_json: unsigned["unsigned_event_json"]
+                    .as_str()
+                    .expect("unsigned event json")
+                    .to_string(),
+            }))
+            .await
+            .expect_err("production runtime should require explicit remote signer session");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(policy_reason(&err), Some("identity_class_mismatch"));
     }
 
     #[tokio::test]
@@ -2067,7 +2099,7 @@ mod tests {
     #[tokio::test]
     async fn policy_denies_publish_to_relay_outside_allowlist() {
         let dir = tempdir().unwrap();
-        let mut relay_policy = default_runtime_signer_policy();
+        let mut relay_policy = local_key_test_signer_policy();
         relay_policy.relay_target_scope =
             RelayTargetScope::allowlist(vec!["wss://relay.radroots.org".to_string()]);
         let server =

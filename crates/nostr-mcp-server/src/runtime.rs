@@ -2,7 +2,7 @@ use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use nostr_mcp_policy::{
     AuthoringAction, CapabilityScope, EventKindScope, IdentityClass, RelayTargetScope,
-    SignerBackend, SignerMethod, SignerPolicy,
+    SignerBackend, SignerMethod, SignerPolicy, default_signer_policy,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +48,7 @@ pub struct NostrMcpRuntime {
     pub paths: NostrMcpPaths,
     pub execution_budgets: NostrMcpExecutionBudgets,
     pub signer_policy: SignerPolicy,
+    pub remote_signer_session_established: bool,
     pub allow_local_key_test_support: bool,
 }
 
@@ -63,6 +64,7 @@ impl NostrMcpRuntime {
             paths: NostrMcpPaths::from_root(config_root),
             execution_budgets: NostrMcpExecutionBudgets::default(),
             signer_policy: default_runtime_signer_policy(),
+            remote_signer_session_established: false,
             allow_local_key_test_support: false,
         }
     }
@@ -74,6 +76,7 @@ impl NostrMcpRuntime {
             paths: NostrMcpPaths::from_root(config_root),
             execution_budgets: self.execution_budgets.clone(),
             signer_policy: self.signer_policy.clone(),
+            remote_signer_session_established: self.remote_signer_session_established,
             allow_local_key_test_support: self.allow_local_key_test_support,
         }
     }
@@ -85,6 +88,7 @@ impl NostrMcpRuntime {
             paths: self.paths.clone(),
             execution_budgets,
             signer_policy: self.signer_policy.clone(),
+            remote_signer_session_established: self.remote_signer_session_established,
             allow_local_key_test_support: self.allow_local_key_test_support,
         }
     }
@@ -96,6 +100,22 @@ impl NostrMcpRuntime {
             paths: self.paths.clone(),
             execution_budgets: self.execution_budgets.clone(),
             signer_policy,
+            remote_signer_session_established: self.remote_signer_session_established,
+            allow_local_key_test_support: self.allow_local_key_test_support,
+        }
+    }
+
+    pub fn with_remote_signer_session_established(
+        &self,
+        remote_signer_session_established: bool,
+    ) -> Self {
+        Self {
+            server_name: self.server_name.clone(),
+            keyring_service: self.keyring_service.clone(),
+            paths: self.paths.clone(),
+            execution_budgets: self.execution_budgets.clone(),
+            signer_policy: self.signer_policy.clone(),
+            remote_signer_session_established,
             allow_local_key_test_support: self.allow_local_key_test_support,
         }
     }
@@ -107,6 +127,7 @@ impl NostrMcpRuntime {
             paths: self.paths.clone(),
             execution_budgets: self.execution_budgets.clone(),
             signer_policy: self.signer_policy.clone(),
+            remote_signer_session_established: self.remote_signer_session_established,
             allow_local_key_test_support,
         }
     }
@@ -127,8 +148,8 @@ pub fn default_config_root() -> PathBuf {
 
 pub fn default_runtime_signer_policy() -> SignerPolicy {
     SignerPolicy {
-        identity_class: IdentityClass::SignerBacked,
-        signer_backend: SignerBackend::LocalTestOnly,
+        identity_class: IdentityClass::RemoteSignerSession,
+        signer_backend: SignerBackend::Nip46Remote,
         capability_scopes: vec![
             CapabilityScope::ManageIdentity,
             CapabilityScope::ManageRelays,
@@ -157,7 +178,7 @@ pub fn default_runtime_signer_policy() -> SignerPolicy {
         ],
         event_kind_scope: EventKindScope::Any,
         relay_target_scope: RelayTargetScope::Any,
-        ..SignerPolicy::default()
+        ..default_signer_policy()
     }
 }
 
@@ -167,7 +188,9 @@ mod tests {
         NostrMcpExecutionBudgets, NostrMcpPaths, NostrMcpRuntime, default_config_root,
         default_runtime_signer_policy,
     };
-    use nostr_mcp_policy::default_signer_policy;
+    use nostr_mcp_policy::{
+        CapabilityScope, IdentityClass, SignerBackend, SignerMethod, default_signer_policy,
+    };
     use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
     #[test]
@@ -184,6 +207,7 @@ mod tests {
             NostrMcpExecutionBudgets::default()
         );
         assert_eq!(runtime.signer_policy, default_runtime_signer_policy());
+        assert!(!runtime.remote_signer_session_established);
         assert!(!runtime.allow_local_key_test_support);
         assert!(
             runtime
@@ -203,6 +227,10 @@ mod tests {
         assert_eq!(updated.paths.config_root, PathBuf::from("/tmp/custom"));
         assert_eq!(updated.execution_budgets, runtime.execution_budgets);
         assert_eq!(updated.signer_policy, runtime.signer_policy);
+        assert_eq!(
+            updated.remote_signer_session_established,
+            runtime.remote_signer_session_established
+        );
         assert_eq!(
             updated.allow_local_key_test_support,
             runtime.allow_local_key_test_support
@@ -232,7 +260,28 @@ mod tests {
         assert_eq!(strict.execution_budgets, runtime.execution_budgets);
         assert_eq!(strict.signer_policy, default_signer_policy());
         assert_eq!(
+            strict.remote_signer_session_established,
+            runtime.remote_signer_session_established
+        );
+        assert_eq!(
             strict.allow_local_key_test_support,
+            runtime.allow_local_key_test_support
+        );
+    }
+
+    #[test]
+    fn runtime_can_mark_remote_signer_session_as_established() {
+        let runtime = NostrMcpRuntime::default();
+        let established = runtime.with_remote_signer_session_established(true);
+
+        assert_eq!(established.server_name, runtime.server_name);
+        assert_eq!(established.keyring_service, runtime.keyring_service);
+        assert_eq!(established.paths, runtime.paths);
+        assert_eq!(established.execution_budgets, runtime.execution_budgets);
+        assert_eq!(established.signer_policy, runtime.signer_policy);
+        assert!(established.remote_signer_session_established);
+        assert_eq!(
+            established.allow_local_key_test_support,
             runtime.allow_local_key_test_support
         );
     }
@@ -247,6 +296,10 @@ mod tests {
         assert_eq!(enabled.paths, runtime.paths);
         assert_eq!(enabled.execution_budgets, runtime.execution_budgets);
         assert_eq!(enabled.signer_policy, runtime.signer_policy);
+        assert_eq!(
+            enabled.remote_signer_session_established,
+            runtime.remote_signer_session_established
+        );
         assert!(enabled.allow_local_key_test_support);
     }
 
@@ -267,8 +320,26 @@ mod tests {
         assert_eq!(updated.execution_budgets, budgets);
         assert_eq!(updated.signer_policy, runtime.signer_policy);
         assert_eq!(
+            updated.remote_signer_session_established,
+            runtime.remote_signer_session_established
+        );
+        assert_eq!(
             updated.allow_local_key_test_support,
             runtime.allow_local_key_test_support
         );
+    }
+
+    #[test]
+    fn default_runtime_policy_requires_remote_signer_session() {
+        let policy = default_runtime_signer_policy();
+
+        assert_eq!(policy.identity_class, IdentityClass::RemoteSignerSession);
+        assert_eq!(policy.signer_backend, SignerBackend::Nip46Remote);
+        assert!(
+            policy
+                .capability_scopes
+                .contains(&CapabilityScope::PublishEvents)
+        );
+        assert!(policy.signer_methods.contains(&SignerMethod::SignEvent));
     }
 }

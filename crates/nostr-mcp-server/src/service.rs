@@ -109,6 +109,10 @@ impl NostrMcpServerServices {
         self.runtime.allow_local_key_test_support
     }
 
+    pub fn remote_signer_session_established(&self) -> bool {
+        self.runtime.remote_signer_session_established
+    }
+
     pub fn required_signing_identity_class(&self) -> IdentityClass {
         match self.configured_signer_backend() {
             SignerBackend::Nip46Remote => IdentityClass::RemoteSignerSession,
@@ -165,22 +169,29 @@ impl NostrMcpServerServices {
     pub async fn effective_signer_policy(&self) -> HostRuntimeResult<SignerPolicy> {
         let mut policy = self.runtime.signer_policy.clone();
 
-        if matches!(policy.signer_backend, SignerBackend::LocalTestOnly) {
-            if !self.local_key_test_support_enabled() {
-                policy.identity_class = IdentityClass::WatchOnly;
-                return Ok(policy);
+        match policy.signer_backend {
+            SignerBackend::Nip46Remote => {
+                if !self.remote_signer_session_established() {
+                    policy.identity_class = IdentityClass::WatchOnly;
+                }
             }
-            let keystore = self.keystore().await?;
-            let active = keystore.get_active().await;
-            let has_secret = match active {
-                Some(active_key) => keystore.secrets().get(&active_key.label)?.is_some(),
-                None => false,
-            };
-            policy.identity_class = if has_secret {
-                IdentityClass::SignerBacked
-            } else {
-                IdentityClass::WatchOnly
-            };
+            SignerBackend::LocalTestOnly => {
+                if !self.local_key_test_support_enabled() {
+                    policy.identity_class = IdentityClass::WatchOnly;
+                    return Ok(policy);
+                }
+                let keystore = self.keystore().await?;
+                let active = keystore.get_active().await;
+                let has_secret = match active {
+                    Some(active_key) => keystore.secrets().get(&active_key.label)?.is_some(),
+                    None => false,
+                };
+                policy.identity_class = if has_secret {
+                    IdentityClass::SignerBacked
+                } else {
+                    IdentityClass::WatchOnly
+                };
+            }
         }
 
         Ok(policy)
@@ -300,6 +311,7 @@ impl NostrMcpServerServices {
 mod tests {
     use super::NostrMcpServerServices;
     use crate::runtime::{NostrMcpExecutionBudgets, NostrMcpRuntime};
+    use nostr_mcp_policy::{IdentityClass, SignerBackend};
     use std::{num::NonZeroUsize, time::Duration};
     use tempfile::tempdir;
     use tokio::time::{sleep, timeout};
@@ -352,5 +364,37 @@ mod tests {
 
         let second = services.acquire_network_permit().await.unwrap();
         drop(second);
+    }
+
+    #[tokio::test]
+    async fn effective_signer_policy_downgrades_remote_signer_without_session() {
+        let dir = tempdir().unwrap();
+        let services = NostrMcpServerServices::new(NostrMcpRuntime::new(
+            "remote-session-missing",
+            "remote-session-missing",
+            dir.path().to_path_buf(),
+        ));
+
+        let policy = services.effective_signer_policy().await.unwrap();
+
+        assert_eq!(policy.signer_backend, SignerBackend::Nip46Remote);
+        assert_eq!(policy.identity_class, IdentityClass::WatchOnly);
+    }
+
+    #[tokio::test]
+    async fn effective_signer_policy_preserves_remote_signer_session_when_explicitly_established() {
+        let dir = tempdir().unwrap();
+        let runtime = NostrMcpRuntime::new(
+            "remote-session-established",
+            "remote-session-established",
+            dir.path().to_path_buf(),
+        )
+        .with_remote_signer_session_established(true);
+        let services = NostrMcpServerServices::new(runtime);
+
+        let policy = services.effective_signer_policy().await.unwrap();
+
+        assert_eq!(policy.signer_backend, SignerBackend::Nip46Remote);
+        assert_eq!(policy.identity_class, IdentityClass::RemoteSignerSession);
     }
 }

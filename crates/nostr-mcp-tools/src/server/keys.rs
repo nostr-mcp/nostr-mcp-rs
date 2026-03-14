@@ -46,11 +46,14 @@ impl NostrMcpServer {
         &self,
         Parameters(args): Parameters<ImportArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.authorize_policy_request(
-            self.raw_secret_request(CapabilityScope::ManageIdentity, None),
-        )
-        .await?;
-        if args.key_material.trim().starts_with("nsec1") {
+        let importing_secret = args.key_material.trim().starts_with("nsec1");
+        let request = if importing_secret {
+            self.raw_secret_request(CapabilityScope::ManageIdentity, None)
+        } else {
+            self.capability_request(CapabilityScope::ManageIdentity)
+        };
+        self.authorize_policy_request(request).await?;
+        if importing_secret {
             self.ensure_local_key_test_support()?;
         }
         let keystore = self.keystore().await?;
