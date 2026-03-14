@@ -30,6 +30,7 @@ pub struct NostrMcpRuntime {
     pub keyring_service: String,
     pub paths: NostrMcpPaths,
     pub signer_policy: SignerPolicy,
+    pub allow_local_key_test_support: bool,
 }
 
 impl NostrMcpRuntime {
@@ -43,6 +44,7 @@ impl NostrMcpRuntime {
             keyring_service: keyring_service.into(),
             paths: NostrMcpPaths::from_root(config_root),
             signer_policy: default_runtime_signer_policy(),
+            allow_local_key_test_support: false,
         }
     }
 
@@ -52,6 +54,7 @@ impl NostrMcpRuntime {
             keyring_service: self.keyring_service.clone(),
             paths: NostrMcpPaths::from_root(config_root),
             signer_policy: self.signer_policy.clone(),
+            allow_local_key_test_support: self.allow_local_key_test_support,
         }
     }
 
@@ -61,6 +64,17 @@ impl NostrMcpRuntime {
             keyring_service: self.keyring_service.clone(),
             paths: self.paths.clone(),
             signer_policy,
+            allow_local_key_test_support: self.allow_local_key_test_support,
+        }
+    }
+
+    pub fn with_local_key_test_support(&self, allow_local_key_test_support: bool) -> Self {
+        Self {
+            server_name: self.server_name.clone(),
+            keyring_service: self.keyring_service.clone(),
+            paths: self.paths.clone(),
+            signer_policy: self.signer_policy.clone(),
+            allow_local_key_test_support,
         }
     }
 }
@@ -132,6 +146,7 @@ mod tests {
             NostrMcpPaths::from_root(default_config_root())
         );
         assert_eq!(runtime.signer_policy, default_runtime_signer_policy());
+        assert!(!runtime.allow_local_key_test_support);
         assert!(
             runtime
                 .paths
@@ -149,6 +164,10 @@ mod tests {
         assert_eq!(updated.keyring_service, "service");
         assert_eq!(updated.paths.config_root, PathBuf::from("/tmp/custom"));
         assert_eq!(updated.signer_policy, runtime.signer_policy);
+        assert_eq!(
+            updated.allow_local_key_test_support,
+            runtime.allow_local_key_test_support
+        );
         assert_eq!(
             updated.paths.index_path,
             PathBuf::from("/tmp/custom/keys.enc")
@@ -172,5 +191,21 @@ mod tests {
         assert_eq!(strict.keyring_service, runtime.keyring_service);
         assert_eq!(strict.paths, runtime.paths);
         assert_eq!(strict.signer_policy, default_signer_policy());
+        assert_eq!(
+            strict.allow_local_key_test_support,
+            runtime.allow_local_key_test_support
+        );
+    }
+
+    #[test]
+    fn runtime_can_enable_local_key_test_support() {
+        let runtime = NostrMcpRuntime::default();
+        let enabled = runtime.with_local_key_test_support(true);
+
+        assert_eq!(enabled.server_name, runtime.server_name);
+        assert_eq!(enabled.keyring_service, runtime.keyring_service);
+        assert_eq!(enabled.paths, runtime.paths);
+        assert_eq!(enabled.signer_policy, runtime.signer_policy);
+        assert!(enabled.allow_local_key_test_support);
     }
 }

@@ -6,6 +6,8 @@ pub(crate) type HostRuntimeResult<T> = Result<T, HostRuntimeError>;
 pub(crate) enum HostRuntimeError {
     #[error("invalid input: {0}")]
     InvalidInput(String),
+    #[error("operation denied: {0}")]
+    OperationDenied(String),
     #[error("io error: {0}")]
     Io(String),
     #[error("crypto error: {0}")]
@@ -26,6 +28,10 @@ impl HostRuntimeError {
 
     pub(crate) fn io<S: Into<String>>(msg: S) -> Self {
         Self::Io(msg.into())
+    }
+
+    pub(crate) fn operation_denied<S: Into<String>>(msg: S) -> Self {
+        Self::OperationDenied(msg.into())
     }
 
     pub(crate) fn crypto<S: Into<String>>(msg: S) -> Self {
@@ -59,6 +65,7 @@ mod tests {
     fn invalid_input_is_classified() {
         assert!(HostRuntimeError::invalid_input("bad input").is_invalid_input());
         assert!(!HostRuntimeError::io("disk").is_invalid_input());
+        assert!(!HostRuntimeError::operation_denied("blocked").is_invalid_input());
     }
 
     #[test]
@@ -68,6 +75,10 @@ mod tests {
             "invalid input: bad input"
         );
         assert_eq!(HostRuntimeError::io("disk").to_string(), "io error: disk");
+        assert_eq!(
+            HostRuntimeError::operation_denied("blocked").to_string(),
+            "operation denied: blocked"
+        );
         assert_eq!(
             HostRuntimeError::crypto("cipher").to_string(),
             "crypto error: cipher"

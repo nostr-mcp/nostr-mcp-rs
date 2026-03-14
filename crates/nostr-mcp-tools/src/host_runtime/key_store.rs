@@ -24,6 +24,7 @@ pub struct KeyStore {
     inner: Arc<RwLock<KeyFile>>,
     pass: Arc<Vec<u8>>,
     secrets: Arc<dyn SecretStore>,
+    allow_local_key_test_support: bool,
 }
 
 impl KeyStore {
@@ -31,6 +32,7 @@ impl KeyStore {
         path: PathBuf,
         pass: Arc<Vec<u8>>,
         secrets: Arc<dyn SecretStore>,
+        allow_local_key_test_support: bool,
     ) -> HostRuntimeResult<Self> {
         ensure_parent_dir(&path)?;
         let data = if path.exists() {
@@ -43,6 +45,7 @@ impl KeyStore {
             inner: Arc::new(RwLock::new(data)),
             pass,
             secrets,
+            allow_local_key_test_support,
         })
     }
 
@@ -105,6 +108,7 @@ impl KeyStore {
         let secret = secret.trim();
 
         if secret.starts_with("nsec1") {
+            self.ensure_local_key_test_support()?;
             let keys =
                 Keys::parse(secret).map_err(|e| HostRuntimeError::invalid_input(e.to_string()))?;
             self.insert_keys(label, keys, make_active, persist_secret)
@@ -126,6 +130,7 @@ impl KeyStore {
         make_active: bool,
         persist_secret: bool,
     ) -> HostRuntimeResult<KeyEntry> {
+        self.ensure_local_key_test_support()?;
         let label = normalize_label(label)?;
         let keys = Keys::generate();
         self.insert_keys(label, keys, make_active, persist_secret)
@@ -232,6 +237,9 @@ impl KeyStore {
         format: ExportFormat,
         include_private: bool,
     ) -> HostRuntimeResult<ExportResult> {
+        if include_private {
+            self.ensure_local_key_test_support()?;
+        }
         let target_label = match label {
             Some(l) => normalize_label(l)?,
             None => {
@@ -303,6 +311,19 @@ impl KeyStore {
     pub fn secrets(&self) -> Arc<dyn SecretStore> {
         self.secrets.clone()
     }
+
+    pub fn local_key_test_support_enabled(&self) -> bool {
+        self.allow_local_key_test_support
+    }
+
+    fn ensure_local_key_test_support(&self) -> HostRuntimeResult<()> {
+        if self.allow_local_key_test_support {
+            return Ok(());
+        }
+        Err(HostRuntimeError::operation_denied(
+            "local key test support is disabled",
+        ))
+    }
 }
 
 async fn ensure_label_available(inner: &RwLock<KeyFile>, label: &str) -> HostRuntimeResult<()> {
@@ -337,7 +358,9 @@ mod tests {
         let pass = Arc::new(b"passphrase".to_vec());
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+        let store = KeyStore::load_or_init(path, pass, secrets, true)
+            .await
+            .unwrap();
 
         let entry = store
             .generate("alice".to_string(), true, true)
@@ -375,7 +398,9 @@ mod tests {
         let source = Keys::generate();
         let npub = source.public_key().to_bech32().unwrap();
 
-        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+        let store = KeyStore::load_or_init(path, pass, secrets, true)
+            .await
+            .unwrap();
 
         let entry = store
             .import_secret("watch".to_string(), npub.clone(), true, true)
@@ -406,7 +431,9 @@ mod tests {
         let pass = Arc::new(b"passphrase".to_vec());
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let store = KeyStore::load_or_init(path, pass, secrets).await.unwrap();
+        let store = KeyStore::load_or_init(path, pass, secrets, true)
+            .await
+            .unwrap();
         store
             .generate("alice".to_string(), true, true)
             .await
@@ -417,5 +444,54 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("label already exists"));
+    }
+
+    #[tokio::test]
+    async fn keystore_denies_local_secret_operations_when_test_support_is_disabled() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("keys.enc");
+        let pass = Arc::new(b"passphrase".to_vec());
+        let secrets = Arc::new(InMemorySecretStore::new());
+        let signing_key = Keys::generate();
+        let nsec = signing_key.secret_key().to_bech32().unwrap();
+        let npub = signing_key.public_key().to_bech32().unwrap();
+
+        let store = KeyStore::load_or_init(path, pass, secrets, false)
+            .await
+            .unwrap();
+
+        let generate_err = store
+            .generate("alice".to_string(), true, true)
+            .await
+            .unwrap_err();
+        assert!(
+            generate_err
+                .to_string()
+                .contains("local key test support is disabled")
+        );
+
+        let import_err = store
+            .import_secret("alice".to_string(), nsec, true, true)
+            .await
+            .unwrap_err();
+        assert!(
+            import_err
+                .to_string()
+                .contains("local key test support is disabled")
+        );
+
+        store
+            .import_secret("watch".to_string(), npub, true, false)
+            .await
+            .unwrap();
+        let export_err = store
+            .export_key(Some("watch".to_string()), ExportFormat::Both, true)
+            .await
+            .unwrap_err();
+        assert!(
+            export_err
+                .to_string()
+                .contains("local key test support is disabled")
+        );
     }
 }

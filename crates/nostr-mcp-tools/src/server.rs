@@ -55,7 +55,13 @@ async fn load_or_init_keystore(
     let pass = Arc::new(util::ensure_keystore_secret(
         paths.keystore_secret_path.as_path(),
     )?);
-    KeyStore::load_or_init(paths.index_path.clone(), pass, secret_store(runtime)).await
+    KeyStore::load_or_init(
+        paths.index_path.clone(),
+        pass,
+        secret_store(runtime),
+        runtime.allow_local_key_test_support,
+    )
+    .await
 }
 
 async fn load_or_init_settings(paths: &NostrMcpPaths) -> HostRuntimeResult<SettingsStore> {
@@ -73,10 +79,11 @@ fn core_error(err: CoreError) -> ErrorData {
 }
 
 fn host_runtime_error(err: HostRuntimeError) -> ErrorData {
-    if let HostRuntimeError::InvalidInput(msg) = err {
-        return ErrorData::invalid_params(msg, None);
+    match err {
+        HostRuntimeError::InvalidInput(msg) => ErrorData::invalid_params(msg, None),
+        HostRuntimeError::OperationDenied(msg) => ErrorData::invalid_request(msg, None),
+        err => ErrorData::internal_error(err.to_string(), None),
     }
-    ErrorData::internal_error(err.to_string(), None)
 }
 
 fn invalid_params<E: ToString>(err: E) -> ErrorData {
@@ -155,6 +162,10 @@ impl NostrMcpServer {
         self.context.runtime.signer_policy.signer_backend
     }
 
+    fn local_key_test_support_enabled(&self) -> bool {
+        self.context.runtime.allow_local_key_test_support
+    }
+
     fn required_signing_identity_class(&self) -> IdentityClass {
         match self.configured_signer_backend() {
             SignerBackend::Nip46Remote => IdentityClass::RemoteSignerSession,
@@ -212,6 +223,10 @@ impl NostrMcpServer {
         let mut policy = self.context.runtime.signer_policy.clone();
 
         if matches!(policy.signer_backend, SignerBackend::LocalTestOnly) {
+            if !self.local_key_test_support_enabled() {
+                policy.identity_class = IdentityClass::WatchOnly;
+                return Ok(policy);
+            }
             let keystore = self.keystore().await?;
             let active = keystore.get_active().await;
             let has_secret = match active {
@@ -246,6 +261,16 @@ impl NostrMcpServer {
     async fn keystore(&self) -> Result<Arc<KeyStore>, ErrorData> {
         let stores = self.context.stores().await.map_err(host_runtime_error)?;
         Ok(stores.keystore.clone())
+    }
+
+    fn ensure_local_key_test_support(&self) -> Result<(), ErrorData> {
+        if self.local_key_test_support_enabled() {
+            return Ok(());
+        }
+        Err(ErrorData::invalid_request(
+            "local key test support is disabled",
+            None,
+        ))
     }
 
     async fn settings_store(&self) -> Result<Arc<SettingsStore>, ErrorData> {
@@ -383,12 +408,13 @@ mod tests {
     use nostr_mcp_types::common::EmptyArgs;
     use nostr_mcp_types::follows::{AddFollowArgs, RemoveFollowArgs, SetFollowsArgs};
     use nostr_mcp_types::key_store::{
-        ExportArgs, ExportFormat, ImportArgs, RemoveArgs, RenameLabelArgs, SetActiveArgs,
+        ExportArgs, ExportFormat, GenerateArgs, ImportArgs, RemoveArgs, RenameLabelArgs,
+        SetActiveArgs,
     };
     use nostr_mcp_types::keys::{DerivePublicArgs, VerifyArgs};
     use nostr_mcp_types::metadata::SetMetadataArgs;
     use nostr_mcp_types::nip30::Nip30ParseArgs;
-    use nostr_mcp_types::nip44::Nip44DecryptArgs;
+    use nostr_mcp_types::nip44::{Nip44DecryptArgs, Nip44EncryptArgs};
     use nostr_mcp_types::publish::{CreateTextArgs, PostTextArgs, SignEventArgs};
     use nostr_mcp_types::references::ParseReferencesArgs;
     use nostr_mcp_types::registry::{
@@ -766,7 +792,8 @@ mod tests {
             format!("golden-{name}"),
             format!("golden-service-{name}"),
             dir.path().to_path_buf(),
-        );
+        )
+        .with_local_key_test_support(true);
         (dir, NostrMcpServer::with_runtime(runtime))
     }
 
@@ -780,7 +807,8 @@ mod tests {
             format!("policy-service-{name}"),
             config_root,
         )
-        .with_signer_policy(signer_policy);
+        .with_signer_policy(signer_policy)
+        .with_local_key_test_support(true);
         NostrMcpServer::with_runtime(runtime)
     }
 
@@ -946,6 +974,13 @@ mod tests {
         assert_eq!(err.message.as_ref(), "io error: disk failed");
     }
 
+    #[test]
+    fn host_runtime_error_maps_denied_operations_to_invalid_request() {
+        let err = host_runtime_error(HostRuntimeError::operation_denied("blocked"));
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.message.as_ref(), "blocked");
+    }
+
     #[tokio::test]
     async fn golden_keys_verify_valid_nsec() {
         let (_dir, server) = golden_server("keys-verify-valid-nsec");
@@ -1001,6 +1036,105 @@ mod tests {
             err.message.as_ref().contains("invalid nip44 payload"),
             "unexpected error message: {}",
             err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_local_key_generation() {
+        let server = NostrMcpServer::new();
+        let err = server
+            .nostr_keys_generate(Parameters(GenerateArgs {
+                label: FIXTURE_PRIMARY_LABEL.to_string(),
+                make_active: Some(true),
+                persist_secret: Some(true),
+            }))
+            .await
+            .expect_err("production runtime should deny local key generation");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_local_secret_import() {
+        let server = NostrMcpServer::new();
+        let err = server
+            .nostr_keys_import(Parameters(ImportArgs {
+                label: FIXTURE_PRIMARY_LABEL.to_string(),
+                key_material: FIXTURE_PRIMARY_NSEC.to_string(),
+                make_active: Some(true),
+                persist_secret: Some(true),
+            }))
+            .await
+            .expect_err("production runtime should deny local secret import");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_private_key_export() {
+        let server = NostrMcpServer::new();
+        import_primary_watch_only_key(&server).await;
+        let err = server
+            .nostr_keys_export(Parameters(ExportArgs {
+                label: None,
+                format: ExportFormat::Both,
+                include_private: true,
+            }))
+            .await
+            .expect_err("production runtime should deny private key export");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_private_key_derivation() {
+        let server = NostrMcpServer::new();
+        let err = server
+            .nostr_keys_derive_public(Parameters(DerivePublicArgs {
+                private_key: FIXTURE_PRIMARY_NSEC.to_string(),
+            }))
+            .await
+            .expect_err("production runtime should deny private key derivation");
+
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.message.as_ref(), "local key test support is disabled");
+    }
+
+    #[tokio::test]
+    async fn production_runtime_denies_nip44_raw_secret_tools() {
+        let server = NostrMcpServer::new();
+        let encrypt_err = server
+            .nostr_nip44_encrypt(Parameters(Nip44EncryptArgs {
+                private_key: FIXTURE_PRIMARY_NSEC.to_string(),
+                public_key: FIXTURE_SECONDARY_NPUB.to_string(),
+                plaintext: "hello orchard".to_string(),
+                version: None,
+            }))
+            .await
+            .expect_err("production runtime should deny nip44 encrypt");
+
+        assert_eq!(encrypt_err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(
+            encrypt_err.message.as_ref(),
+            "local key test support is disabled"
+        );
+
+        let decrypt_err = server
+            .nostr_nip44_decrypt(Parameters(Nip44DecryptArgs {
+                private_key: FIXTURE_PRIMARY_NSEC.to_string(),
+                public_key: FIXTURE_SECONDARY_NPUB.to_string(),
+                ciphertext: "not-base64".to_string(),
+            }))
+            .await
+            .expect_err("production runtime should deny nip44 decrypt");
+
+        assert_eq!(decrypt_err.code, ErrorCode::INVALID_REQUEST);
+        assert_eq!(
+            decrypt_err.message.as_ref(),
+            "local key test support is disabled"
         );
     }
 
@@ -1499,16 +1633,14 @@ mod tests {
     async fn server_state_is_scoped_per_instance() {
         let dir_a = tempdir().unwrap();
         let dir_b = tempdir().unwrap();
-        let server_a = NostrMcpServer::with_runtime(NostrMcpRuntime::new(
-            "nostr-a",
-            "service-a",
-            dir_a.path().to_path_buf(),
-        ));
-        let server_b = NostrMcpServer::with_runtime(NostrMcpRuntime::new(
-            "nostr-b",
-            "service-b",
-            dir_b.path().to_path_buf(),
-        ));
+        let server_a = NostrMcpServer::with_runtime(
+            NostrMcpRuntime::new("nostr-a", "service-a", dir_a.path().to_path_buf())
+                .with_local_key_test_support(true),
+        );
+        let server_b = NostrMcpServer::with_runtime(
+            NostrMcpRuntime::new("nostr-b", "service-b", dir_b.path().to_path_buf())
+                .with_local_key_test_support(true),
+        );
 
         let keystore_a = server_a.keystore().await.unwrap();
         let settings_a = server_a.settings_store().await.unwrap();

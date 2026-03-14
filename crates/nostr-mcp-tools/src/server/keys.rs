@@ -24,6 +24,7 @@ impl NostrMcpServer {
             self.raw_secret_request(CapabilityScope::ManageIdentity, None),
         )
         .await?;
+        self.ensure_local_key_test_support()?;
         let keystore = self.keystore().await?;
         let entry = keystore
             .generate(
@@ -49,6 +50,9 @@ impl NostrMcpServer {
             self.raw_secret_request(CapabilityScope::ManageIdentity, None),
         )
         .await?;
+        if args.key_material.trim().starts_with("nsec1") {
+            self.ensure_local_key_test_support()?;
+        }
         let keystore = self.keystore().await?;
         let entry = keystore
             .import_secret(
@@ -169,6 +173,9 @@ impl NostrMcpServer {
             self.capability_request(CapabilityScope::ManageIdentity)
         };
         self.authorize_policy_request(request).await?;
+        if args.include_private {
+            self.ensure_local_key_test_support()?;
+        }
         let keystore = self.keystore().await?;
         let result = keystore
             .export_key(args.label, args.format, args.include_private)
@@ -202,6 +209,7 @@ impl NostrMcpServer {
             Some(SignerMethod::GetPublicKey),
         ))
         .await?;
+        self.ensure_local_key_test_support()?;
         let result = derive_public(&args.private_key).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))

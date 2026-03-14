@@ -49,6 +49,11 @@ async fn build_from_keystore(
     let secrets = ks.secrets();
     let maybe_nsec = secrets.get(&label)?;
     let client = if let Some(nsec) = maybe_nsec {
+        if !ks.local_key_test_support_enabled() {
+            return Err(HostRuntimeError::operation_denied(
+                "local key test support is disabled",
+            ));
+        }
         let keys = Keys::parse(&nsec).map_err(|e| {
             HostRuntimeError::invalid_input(format!("invalid stored secret for '{label}': {e}"))
         })?;
@@ -181,7 +186,7 @@ mod tests {
         let pass = Arc::new(vec![1u8; 32]);
         let secrets = Arc::new(InMemorySecretStore::new());
 
-        let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets)
+        let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets, false)
             .await
             .unwrap();
         let ss = SettingsStore::load_or_init(settings_path, pass)
@@ -194,5 +199,39 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("no active nostr key"));
+    }
+
+    #[tokio::test]
+    async fn ensure_client_denies_local_secret_signer_when_test_support_is_disabled() {
+        let dir = tempdir().unwrap();
+        let key_path = dir.path().join("keys.enc");
+        let settings_path = dir.path().join("settings.enc");
+        let pass = Arc::new(vec![1u8; 32]);
+        let secrets = Arc::new(InMemorySecretStore::new());
+
+        let seeded = KeyStore::load_or_init(key_path.clone(), pass.clone(), secrets.clone(), true)
+            .await
+            .unwrap();
+        seeded
+            .generate("alice".to_string(), true, true)
+            .await
+            .unwrap();
+
+        let ks = KeyStore::load_or_init(key_path, pass.clone(), secrets, false)
+            .await
+            .unwrap();
+        let ss = SettingsStore::load_or_init(settings_path, pass)
+            .await
+            .unwrap();
+        let store = ClientStore::new();
+
+        let err = store
+            .ensure_client(Arc::new(ks), Arc::new(ss))
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("local key test support is disabled")
+        );
     }
 }

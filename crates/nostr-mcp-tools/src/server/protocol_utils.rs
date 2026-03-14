@@ -46,6 +46,7 @@ impl NostrMcpServer {
             Some(SignerMethod::Nip44Encrypt),
         ))
         .await?;
+        self.ensure_local_key_test_support()?;
         let result = encrypt_nip44(args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
@@ -61,6 +62,7 @@ impl NostrMcpServer {
             Some(SignerMethod::Nip44Decrypt),
         ))
         .await?;
+        self.ensure_local_key_test_support()?;
         let result = decrypt_nip44(args).map_err(core_error)?;
         let content = Content::json(serde_json::json!(result))?;
         Ok(CallToolResult::success(vec![content]))
