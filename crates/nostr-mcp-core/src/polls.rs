@@ -5,9 +5,60 @@ use nostr_mcp_types::polls::{CreatePollArgs, PollResultOption, PollResults, Vote
 use nostr_mcp_types::publish::SendResult;
 use nostr_sdk::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::str::FromStr;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreparedPoll {
+    poll: Poll,
+    pow: Option<u8>,
+    to_relays: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreparedVote {
+    response: PollResponse,
+    pow: Option<u8>,
+    to_relays: Option<Vec<String>>,
+}
+
 pub async fn create_poll(client: &Client, args: CreatePollArgs) -> Result<SendResult, CoreError> {
+    let prepared = prepare_poll(args)?;
+    let mut builder = EventBuilder::poll(prepared.poll);
+
+    if let Some(pow) = prepared.pow {
+        builder = builder.pow(pow);
+    }
+
+    publish_event_builder(client, builder, prepared.to_relays).await
+}
+
+pub async fn vote_poll(client: &Client, args: VotePollArgs) -> Result<SendResult, CoreError> {
+    let prepared = prepare_vote(args)?;
+    let mut builder = EventBuilder::poll_response(prepared.response);
+
+    if let Some(pow) = prepared.pow {
+        builder = builder.pow(pow);
+    }
+
+    publish_event_builder(client, builder, prepared.to_relays).await
+}
+
+pub fn get_poll_results<'a>(
+    client: &'a Client,
+    poll_event_id: &'a str,
+    timeout_secs: u64,
+) -> impl Future<Output = Result<PollResults, CoreError>> + 'a {
+    get_poll_results_with_fetchers(
+        poll_event_id,
+        timeout_secs,
+        Timestamp::now().as_secs(),
+        |poll_id, timeout_secs| fetch_poll_events(client, poll_id, timeout_secs),
+        |poll_id, timeout_secs| fetch_vote_events(client, poll_id, timeout_secs),
+    )
+}
+
+fn prepare_poll(args: CreatePollArgs) -> Result<PreparedPoll, CoreError> {
     let question = ensure_non_empty("question", &args.question)?;
     if args.options.len() < 2 {
         return Err(CoreError::invalid_input(
@@ -38,31 +89,27 @@ pub async fn create_poll(client: &Client, args: CreatePollArgs) -> Result<SendRe
 
     let relays = parse_relays(&args.relay_urls)?;
     let poll_type = parse_poll_type(args.poll_type.as_deref())?;
-    let mut builder = EventBuilder::poll(Poll {
-        title: question,
-        r#type: poll_type,
-        options,
-        relays,
-        ends_at: args.ends_at.map(Timestamp::from_secs),
-    });
-
-    if let Some(pow) = args.pow {
-        builder = builder.pow(pow);
-    }
-
-    publish_event_builder(client, builder, args.to_relays).await
+    Ok(PreparedPoll {
+        poll: Poll {
+            title: question,
+            r#type: poll_type,
+            options,
+            relays,
+            ends_at: args.ends_at.map(Timestamp::from_secs),
+        },
+        pow: args.pow,
+        to_relays: args.to_relays,
+    })
 }
 
-pub async fn vote_poll(client: &Client, args: VotePollArgs) -> Result<SendResult, CoreError> {
+fn prepare_vote(args: VotePollArgs) -> Result<PreparedVote, CoreError> {
     if args.option_ids.is_empty() {
         return Err(CoreError::invalid_input(
             "must select at least one option".to_string(),
         ));
     }
 
-    let poll_event_id = EventId::parse(args.poll_event_id.trim()).map_err(|e| {
-        CoreError::invalid_input(format!("invalid event id {}: {e}", args.poll_event_id))
-    })?;
+    let poll_event_id = parse_poll_event_id(&args.poll_event_id)?;
     let option_ids = normalize_vote_option_ids(&args.option_ids)?;
 
     let response = if option_ids.len() == 1 {
@@ -77,61 +124,93 @@ pub async fn vote_poll(client: &Client, args: VotePollArgs) -> Result<SendResult
         }
     };
 
-    let mut builder = EventBuilder::poll_response(response);
-
-    if let Some(pow) = args.pow {
-        builder = builder.pow(pow);
-    }
-
-    publish_event_builder(client, builder, args.to_relays).await
+    Ok(PreparedVote {
+        response,
+        pow: args.pow,
+        to_relays: args.to_relays,
+    })
 }
 
-pub async fn get_poll_results(
-    client: &Client,
-    poll_event_id: &str,
-    timeout_secs: u64,
-) -> Result<PollResults, CoreError> {
-    let poll_id = EventId::parse(poll_event_id.trim())
-        .map_err(|e| CoreError::invalid_input(format!("invalid event id {poll_event_id}: {e}")))?;
+fn parse_poll_event_id(poll_event_id: &str) -> Result<EventId, CoreError> {
+    EventId::parse(poll_event_id.trim())
+        .map_err(|e| CoreError::invalid_input(format!("invalid event id {poll_event_id}: {e}")))
+}
 
+async fn fetch_poll_events(
+    client: &Client,
+    poll_id: EventId,
+    timeout_secs: u64,
+) -> Result<Events, CoreError> {
     let poll_filter = Filter::new().id(poll_id).kind(Kind::from(1068)).limit(1);
 
-    let poll_events = client
+    client
         .fetch_events(poll_filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::operation(format!("fetch poll: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch poll: {e}")))
+}
 
-    let poll_event = poll_events
-        .iter()
-        .next()
-        .ok_or_else(|| CoreError::invalid_input("poll not found".to_string()))?;
-
-    let poll = Poll::from_event(poll_event)
-        .map_err(|e| CoreError::invalid_input(format!("invalid poll event: {e}")))?;
-
+async fn fetch_vote_events(
+    client: &Client,
+    poll_id: EventId,
+    timeout_secs: u64,
+) -> Result<Events, CoreError> {
     let vote_filter = Filter::new()
         .kind(Kind::from(1018))
         .custom_tag(SingleLetterTag::lowercase(Alphabet::E), poll_id.to_hex());
 
-    let vote_events = client
+    client
         .fetch_events(vote_filter, std::time::Duration::from_secs(timeout_secs))
         .await
-        .map_err(|e| CoreError::operation(format!("fetch votes: {e}")))?;
+        .map_err(|e| CoreError::operation(format!("fetch votes: {e}")))
+}
 
-    let options_map: HashMap<String, String> = poll
-        .options
+fn poll_from_events(events: &Events) -> Result<Poll, CoreError> {
+    let poll_event = events
         .iter()
-        .map(|option| (option.id.clone(), option.text.clone()))
-        .collect();
+        .next()
+        .ok_or_else(|| CoreError::invalid_input("poll not found".to_string()))?;
 
+    Poll::from_event(poll_event).map_err(map_invalid_poll_event)
+}
+
+fn map_invalid_poll_event(error: nostr::nips::nip88::Error) -> CoreError {
+    CoreError::invalid_input(format!("invalid poll event: {error}"))
+}
+
+async fn get_poll_results_with_fetchers<FetchPoll, FetchVote, PollFuture, VoteFuture>(
+    poll_event_id: &str,
+    timeout_secs: u64,
+    now: u64,
+    fetch_poll: FetchPoll,
+    fetch_vote: FetchVote,
+) -> Result<PollResults, CoreError>
+where
+    FetchPoll: FnOnce(EventId, u64) -> PollFuture,
+    FetchVote: FnOnce(EventId, u64) -> VoteFuture,
+    PollFuture: Future<Output = Result<Events, CoreError>>,
+    VoteFuture: Future<Output = Result<Events, CoreError>>,
+{
+    let poll_id = parse_poll_event_id(poll_event_id)?;
+    let poll_events = fetch_poll(poll_id, timeout_secs).await?;
+    let poll = poll_from_events(&poll_events)?;
+    let vote_events = fetch_vote(poll_id, timeout_secs).await?;
+
+    Ok(build_poll_results(poll_event_id, poll, &vote_events, now))
+}
+
+fn build_poll_results(
+    poll_event_id: &str,
+    poll: Poll,
+    vote_events: &Events,
+    now: u64,
+) -> PollResults {
+    let options_map = options_map_for_poll(&poll);
     let (vote_counts, total_votes) = tally_votes(
         vote_events.iter(),
         &options_map,
         poll.r#type,
         poll.ends_at.map(|value| value.as_secs()),
     );
-
-    let now = Timestamp::now().as_secs();
     let ended = poll
         .ends_at
         .is_some_and(|end_time| now > end_time.as_secs());
@@ -147,7 +226,7 @@ pub async fn get_poll_results(
 
     options.sort_by(|a, b| a.option_id.cmp(&b.option_id));
 
-    Ok(PollResults {
+    PollResults {
         poll_id: poll_event_id.to_string(),
         question: poll.title,
         poll_type: poll.r#type.to_string(),
@@ -155,7 +234,14 @@ pub async fn get_poll_results(
         options,
         ended,
         ends_at: poll.ends_at.map(|value| value.as_secs()),
-    })
+    }
+}
+
+fn options_map_for_poll(poll: &Poll) -> HashMap<String, String> {
+    poll.options
+        .iter()
+        .map(|option| (option.id.clone(), option.text.clone()))
+        .collect()
 }
 
 fn ensure_non_empty(field: &str, value: &str) -> Result<String, CoreError> {
@@ -204,6 +290,19 @@ fn normalize_vote_option_ids(values: &[String]) -> Result<Vec<String>, CoreError
     Ok(normalized)
 }
 
+fn selected_options_from_event(vote_event: &Event) -> Vec<String> {
+    let mut selected_options = Vec::new();
+
+    for tag in vote_event.tags.iter() {
+        let tag_vec = tag.clone().to_vec();
+        if tag_vec.len() >= 2 && tag_vec[0] == "response" {
+            selected_options.push(tag_vec[1].clone());
+        }
+    }
+
+    selected_options
+}
+
 fn tally_votes<'a, I>(
     vote_events: I,
     options_map: &HashMap<String, String>,
@@ -226,14 +325,7 @@ where
         }
 
         let pubkey = vote_event.pubkey.to_hex();
-        let mut selected_options = Vec::new();
-
-        for tag in vote_event.tags.iter() {
-            let tag_vec = tag.clone().to_vec();
-            if tag_vec.len() >= 2 && tag_vec[0] == "response" {
-                selected_options.push(tag_vec[1].clone());
-            }
-        }
+        let selected_options = selected_options_from_event(vote_event);
 
         if selected_options.is_empty() {
             continue;
@@ -290,82 +382,4 @@ fn normalize_selected_options(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{normalize_selected_options, parse_poll_type, tally_votes};
-    use nostr::nips::nip88::PollType;
-    use nostr_sdk::prelude::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn parse_poll_type_defaults_to_single_choice() {
-        let poll_type = parse_poll_type(None).unwrap();
-        assert_eq!(poll_type, PollType::SingleChoice);
-    }
-
-    #[test]
-    fn tally_votes_prefers_latest_and_ignores_ended() {
-        let mut options_map: HashMap<String, String> = HashMap::new();
-        options_map.insert("a".to_string(), "Alpha".to_string());
-        options_map.insert("b".to_string(), "Beta".to_string());
-
-        let keys = Keys::generate();
-        let vote_a = build_vote_event(&keys, 100, vec!["a".to_string()]);
-        let vote_b = build_vote_event(&keys, 200, vec!["b".to_string()]);
-        let late_vote = build_vote_event(&Keys::generate(), 300, vec!["a".to_string()]);
-
-        let votes = [vote_a.clone(), vote_b.clone(), late_vote];
-        let (counts, total_votes) = tally_votes(
-            votes.iter(),
-            &options_map,
-            PollType::SingleChoice,
-            Some(250),
-        );
-
-        assert_eq!(total_votes, 1);
-        assert_eq!(*counts.get("a").unwrap_or(&0), 0);
-        assert_eq!(*counts.get("b").unwrap_or(&0), 1);
-    }
-
-    #[test]
-    fn single_choice_counts_only_first_valid_response() {
-        let mut options_map: HashMap<String, String> = HashMap::new();
-        options_map.insert("a".to_string(), "Alpha".to_string());
-        options_map.insert("b".to_string(), "Beta".to_string());
-
-        let normalized = normalize_selected_options(
-            &["b".to_string(), "a".to_string()],
-            &options_map,
-            PollType::SingleChoice,
-        );
-
-        assert_eq!(normalized, vec!["b".to_string()]);
-    }
-
-    #[test]
-    fn multiple_choice_deduplicates_responses() {
-        let mut options_map: HashMap<String, String> = HashMap::new();
-        options_map.insert("a".to_string(), "Alpha".to_string());
-        options_map.insert("b".to_string(), "Beta".to_string());
-
-        let normalized = normalize_selected_options(
-            &["a".to_string(), "a".to_string(), "b".to_string()],
-            &options_map,
-            PollType::MultipleChoice,
-        );
-
-        assert_eq!(normalized, vec!["a".to_string(), "b".to_string()]);
-    }
-
-    fn build_vote_event(keys: &Keys, created_at: u64, responses: Vec<String>) -> Event {
-        let mut tags = Vec::new();
-        for response in responses {
-            tags.push(Tag::parse(&["response".to_string(), response]).unwrap());
-        }
-
-        EventBuilder::new(Kind::from(1018), "")
-            .tags(tags)
-            .custom_created_at(Timestamp::from_secs(created_at))
-            .sign_with_keys(keys)
-            .unwrap()
-    }
-}
+mod tests;
