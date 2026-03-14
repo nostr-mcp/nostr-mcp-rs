@@ -63,3 +63,199 @@ impl GroupModerationService {
         crate::groups::leave_group(client, args).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::GroupModerationService;
+    use nostr_mcp_types::groups::{
+        CreateGroupArgs, CreateInviteArgs, DeleteEventArgs, DeleteGroupArgs, EditGroupMetadataArgs,
+        JoinGroupArgs, LeaveGroupArgs, PutUserArgs, RemoveUserArgs,
+    };
+    use nostr_sdk::prelude::*;
+
+    fn client() -> Client {
+        Client::new(Keys::generate())
+    }
+
+    #[tokio::test]
+    async fn service_put_user_rejects_invalid_group_id() {
+        let err = GroupModerationService::put_user(
+            &client(),
+            PutUserArgs {
+                content: "content".to_string(),
+                group_id: " ".to_string(),
+                pubkey: Keys::generate().public_key().to_hex(),
+                roles: None,
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("group_id must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn service_remove_user_rejects_invalid_pubkey() {
+        let err = GroupModerationService::remove_user(
+            &client(),
+            RemoveUserArgs {
+                content: "content".to_string(),
+                group_id: "group-1".to_string(),
+                pubkey: "not-a-pubkey".to_string(),
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid public key"));
+    }
+
+    #[tokio::test]
+    async fn service_edit_metadata_rejects_invalid_picture_url() {
+        let err = GroupModerationService::edit_metadata(
+            &client(),
+            EditGroupMetadataArgs {
+                content: "content".to_string(),
+                group_id: "group-1".to_string(),
+                name: None,
+                picture: Some("not-a-url".to_string()),
+                about: None,
+                unrestricted: None,
+                visible: None,
+                public: None,
+                open: None,
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid picture url"));
+    }
+
+    #[tokio::test]
+    async fn service_delete_event_rejects_invalid_event_id() {
+        let err = GroupModerationService::delete_event(
+            &client(),
+            DeleteEventArgs {
+                content: "content".to_string(),
+                group_id: "group-1".to_string(),
+                event_id: "bad-id".to_string(),
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid event id"));
+    }
+
+    #[tokio::test]
+    async fn service_create_group_rejects_invalid_group_id() {
+        let err = GroupModerationService::create_group(
+            &client(),
+            CreateGroupArgs {
+                content: "content".to_string(),
+                group_id: "bad id".to_string(),
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("group_id must contain only a-z, 0-9, '-' or '_'")
+        );
+    }
+
+    #[tokio::test]
+    async fn service_delete_group_rejects_invalid_group_id() {
+        let err = GroupModerationService::delete_group(
+            &client(),
+            DeleteGroupArgs {
+                content: "content".to_string(),
+                group_id: "bad id".to_string(),
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("group_id must contain only a-z, 0-9, '-' or '_'")
+        );
+    }
+
+    #[tokio::test]
+    async fn service_create_invite_rejects_empty_code() {
+        let err = GroupModerationService::create_invite(
+            &client(),
+            CreateInviteArgs {
+                content: "content".to_string(),
+                group_id: "group-1".to_string(),
+                code: Some("   ".to_string()),
+                previous_refs: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("code must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn service_join_rejects_empty_invite_code() {
+        let err = GroupModerationService::join(
+            &client(),
+            JoinGroupArgs {
+                content: "content".to_string(),
+                group_id: "group-1".to_string(),
+                invite_code: Some("   ".to_string()),
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invite_code must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn service_leave_rejects_invalid_group_id() {
+        let err = GroupModerationService::leave(
+            &client(),
+            LeaveGroupArgs {
+                content: "content".to_string(),
+                group_id: "bad id".to_string(),
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("group_id must contain only a-z, 0-9, '-' or '_'")
+        );
+    }
+}
