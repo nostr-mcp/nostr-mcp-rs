@@ -35,27 +35,4 @@ impl ProfileService {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::ProfileService;
-    use nostr_mcp_types::metadata::SetMetadataArgs;
-
-    #[test]
-    fn service_maps_metadata_args_to_profile() {
-        let profile = ProfileService::from_args(&SetMetadataArgs {
-            name: Some("name".to_string()),
-            display_name: Some("display".to_string()),
-            about: Some("about".to_string()),
-            picture: None,
-            banner: None,
-            nip05: None,
-            lud06: None,
-            lud16: None,
-            website: None,
-            publish: None,
-        });
-
-        assert_eq!(profile.name.as_deref(), Some("name"));
-        assert_eq!(profile.display_name.as_deref(), Some("display"));
-        assert_eq!(profile.about.as_deref(), Some("about"));
-    }
-}
+mod tests;

@@ -6,6 +6,13 @@ use nostr_mcp_types::settings::ProfileMetadata;
 use nostr_sdk::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PublishedMetadataOutput {
+    event_id: String,
+    success_relays: Vec<String>,
+    failed_relays: HashMap<String, String>,
+}
+
 pub fn profile_to_nostr_metadata(profile: &ProfileMetadata) -> Result<Metadata, CoreError> {
     let mut metadata = Metadata::new();
 
@@ -60,43 +67,75 @@ pub fn args_to_profile(args: &SetMetadataArgs) -> ProfileMetadata {
     }
 }
 
+fn published_metadata_output(out: Output<EventId>) -> PublishedMetadataOutput {
+    PublishedMetadataOutput {
+        event_id: out.id().to_string(),
+        success_relays: out.success.into_iter().map(|u| u.to_string()).collect(),
+        failed_relays: out
+            .failed
+            .into_iter()
+            .map(|(u, e)| (u.to_string(), e.to_string()))
+            .collect(),
+    }
+}
+
+fn publish_metadata_result(output: PublishedMetadataOutput, pubkey: String) -> MetadataResult {
+    MetadataResult {
+        saved: true,
+        published: true,
+        event_id: Some(output.event_id),
+        pubkey: Some(pubkey),
+        success_relays: output.success_relays,
+        failed_relays: output.failed_relays,
+    }
+}
+
+fn parse_metadata_content(content: &str) -> Result<Metadata, CoreError> {
+    Metadata::from_json(content).map_err(|e| CoreError::operation(format!("parse metadata: {e}")))
+}
+
+fn metadata_from_events<T>(events: T) -> Result<Option<Metadata>, CoreError>
+where
+    T: IntoIterator<Item = Event>,
+{
+    if let Some(event) = events.into_iter().next() {
+        parse_metadata_content(&event.content).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn collect_metadata_events(events: Events) -> Vec<Event> {
+    events.into_iter().collect()
+}
+
 pub async fn publish_metadata(
     client: &Client,
     profile: &ProfileMetadata,
 ) -> Result<MetadataResult, CoreError> {
-    let metadata = profile_to_nostr_metadata(profile)?;
+    let metadata = match profile_to_nostr_metadata(profile) {
+        Ok(metadata) => metadata,
+        Err(err) => return Err(err),
+    };
     let builder = EventBuilder::metadata(&metadata);
-
+    let signer = client
+        .signer()
+        .await
+        .map_err(|e| CoreError::operation(format!("get signer: {e}")))?;
+    let pubkey = signer
+        .get_public_key()
+        .await
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?
+        .to_hex();
     let output = client
         .send_event_builder(builder)
         .await
         .map_err(|e| CoreError::operation(format!("publish metadata: {e}")))?;
 
-    let pubkey = client
-        .signer()
-        .await
-        .map_err(|e| CoreError::operation(format!("get signer: {e}")))?
-        .get_public_key()
-        .await
-        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?
-        .to_hex();
-
-    let event_id = output.id().to_string();
-    let success_relays: Vec<String> = output.success.iter().map(|u| u.to_string()).collect();
-    let failed_relays: HashMap<String, String> = output
-        .failed
-        .iter()
-        .map(|(u, e)| (u.to_string(), e.to_string()))
-        .collect();
-
-    Ok(MetadataResult {
-        saved: true,
-        published: true,
-        event_id: Some(event_id),
-        pubkey: Some(pubkey),
-        success_relays,
-        failed_relays,
-    })
+    Ok(publish_metadata_result(
+        published_metadata_output(output),
+        pubkey,
+    ))
 }
 
 pub async fn fetch_metadata(
@@ -116,15 +155,10 @@ pub async fn fetch_metadata_with_timeout(
     let events = client
         .fetch_events(filter, std::time::Duration::from_secs(timeout_secs))
         .await
+        .map(collect_metadata_events)
         .map_err(|e| CoreError::operation(format!("fetch metadata: {e}")))?;
 
-    if let Some(event) = events.first() {
-        let metadata = Metadata::from_json(&event.content)
-            .map_err(|e| CoreError::operation(format!("parse metadata: {e}")))?;
-        Ok(Some(metadata))
-    } else {
-        Ok(None)
-    }
+    metadata_from_events(events)
 }
 
 pub async fn fetch_profile(
@@ -132,10 +166,14 @@ pub async fn fetch_profile(
     args: ProfileGetArgs,
 ) -> Result<ProfileGetResult, CoreError> {
     let pubkey = parse_pubkey(&args.pubkey)?;
-    let metadata = fetch_metadata_with_timeout(client, &pubkey, args.timeout()).await?;
-    let pubkey_bech32 = pubkey
-        .to_bech32()
-        .map_err(|e| CoreError::invalid_input(format!("invalid pubkey: {e}")))?;
+    let metadata = match fetch_metadata_with_timeout(client, &pubkey, args.timeout()).await {
+        Ok(metadata) => metadata,
+        Err(err) => return Err(err),
+    };
+    let pubkey_bech32 = match pubkey.to_bech32() {
+        Ok(value) => value,
+        Err(err) => match err {},
+    };
 
     Ok(ProfileGetResult {
         pubkey: pubkey_bech32,
@@ -148,9 +186,11 @@ fn parse_pubkey(value: &str) -> Result<PublicKey, CoreError> {
     if value.starts_with("npub1") {
         PublicKey::from_bech32(value)
             .map_err(|e| CoreError::invalid_input(format!("invalid npub: {e}")))
-    } else if value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()) {
-        PublicKey::from_hex(value)
-            .map_err(|e| CoreError::invalid_input(format!("invalid hex pubkey: {e}")))
+    } else if value.len() == 64 {
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(value, &mut bytes)
+            .map_err(|e| CoreError::invalid_input(format!("invalid hex pubkey: {e}")))?;
+        Ok(PublicKey::from_byte_array(bytes))
     } else {
         Err(CoreError::invalid_input(
             "invalid pubkey format; expected npub1... or 64-character hex",
@@ -159,61 +199,4 @@ fn parse_pubkey(value: &str) -> Result<PublicKey, CoreError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{args_to_profile, parse_pubkey, profile_to_nostr_metadata};
-    use nostr_mcp_types::metadata::SetMetadataArgs;
-    use nostr_mcp_types::settings::ProfileMetadata;
-    use nostr_sdk::prelude::*;
-
-    #[test]
-    fn args_to_profile_maps_fields() {
-        let args = SetMetadataArgs {
-            name: Some("name".to_string()),
-            display_name: Some("display".to_string()),
-            about: Some("about".to_string()),
-            picture: None,
-            banner: None,
-            nip05: None,
-            lud06: None,
-            lud16: None,
-            website: None,
-            publish: None,
-        };
-
-        let profile = args_to_profile(&args);
-        assert_eq!(profile.name.as_deref(), Some("name"));
-        assert_eq!(profile.display_name.as_deref(), Some("display"));
-        assert_eq!(profile.about.as_deref(), Some("about"));
-    }
-
-    #[test]
-    fn profile_to_metadata_rejects_bad_url() {
-        let profile = ProfileMetadata {
-            name: None,
-            display_name: None,
-            about: None,
-            picture: Some("not a url".to_string()),
-            banner: None,
-            nip05: None,
-            lud06: None,
-            lud16: None,
-            website: None,
-        };
-
-        let err = profile_to_nostr_metadata(&profile).unwrap_err();
-        assert!(err.to_string().contains("invalid picture url"));
-    }
-
-    #[test]
-    fn parse_pubkey_accepts_npub_and_hex() {
-        let keys = Keys::generate();
-        let npub = keys.public_key().to_bech32().unwrap();
-        let hex = keys.public_key().to_hex();
-
-        let parsed_npub = parse_pubkey(&npub).unwrap();
-        let parsed_hex = parse_pubkey(&hex).unwrap();
-
-        assert_eq!(parsed_npub, keys.public_key());
-        assert_eq!(parsed_hex, keys.public_key());
-    }
-}
+mod tests;

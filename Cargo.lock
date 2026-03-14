@@ -1515,6 +1515,7 @@ name = "nostr-mcp-core"
 version = "0.1.0-alpha.1"
 dependencies = [
  "base64",
+ "hex",
  "nostr",
  "nostr-mcp-types",
  "nostr-relay-builder",
