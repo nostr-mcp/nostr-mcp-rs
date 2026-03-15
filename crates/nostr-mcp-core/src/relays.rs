@@ -4,7 +4,7 @@ use nostr_mcp_types::relays::{RelaysConnectArgs, RelaysDisconnectArgs, RelaysSet
 use nostr_sdk::prelude::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RelayMode {
     Read,
     Write,
@@ -123,12 +123,35 @@ pub async fn status_summary(client: &Client) -> Result<HashMap<String, String>, 
 
 #[cfg(test)]
 mod tests {
-    use super::parse_read_write;
+    use super::{
+        connect_relays, disconnect_relays, get_relay_urls, list_relays, parse_read_write,
+        set_relays, status_summary,
+    };
+    use nostr_mcp_types::relays::{RelaysConnectArgs, RelaysDisconnectArgs, RelaysSetArgs};
+    use nostr_relay_builder::MockRelay;
+    use nostr_sdk::prelude::*;
+    use std::collections::{HashMap, HashSet};
+
+    async fn relay_flags(client: &Client, url: &str) -> (bool, bool, bool) {
+        let relays = client.relays().await;
+        let relay = relays.get(&RelayUrl::parse(url).unwrap()).unwrap();
+        let flags = relay.flags();
+        (
+            flags.has(RelayServiceFlags::READ, FlagCheck::Any),
+            flags.has(RelayServiceFlags::WRITE, FlagCheck::Any),
+            flags.has(RelayServiceFlags::DISCOVERY, FlagCheck::Any),
+        )
+    }
 
     #[test]
     fn parse_read_write_defaults_to_both() {
-        let mode = parse_read_write(None).unwrap();
-        assert!(matches!(mode, super::RelayMode::Both));
+        assert_eq!(parse_read_write(None).unwrap(), super::RelayMode::Both);
+    }
+
+    #[test]
+    fn parse_read_write_accepts_read_and_write() {
+        assert_eq!(parse_read_write(Some("read")).unwrap(), super::RelayMode::Read);
+        assert_eq!(parse_read_write(Some("write")).unwrap(), super::RelayMode::Write);
     }
 
     #[test]
@@ -138,5 +161,326 @@ mod tests {
             err.to_string()
                 .contains("read_write must be one of: read, write, both")
         );
+    }
+
+    #[tokio::test]
+    async fn set_relays_adds_relays_for_all_modes_without_autoconnect() {
+        let client = Client::new(Keys::generate());
+
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://read.example.com".to_string()],
+                read_write: Some("read".to_string()),
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://write.example.com".to_string()],
+                read_write: Some("write".to_string()),
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://both.example.com".to_string()],
+                read_write: None,
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            relay_flags(&client, "wss://read.example.com").await,
+            (true, false, false)
+        );
+        assert_eq!(
+            relay_flags(&client, "wss://write.example.com").await,
+            (false, true, false)
+        );
+        assert_eq!(
+            relay_flags(&client, "wss://both.example.com").await,
+            (true, true, false)
+        );
+    }
+
+    #[tokio::test]
+    async fn set_relays_autoconnects_when_enabled() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let client = Client::new(Keys::generate());
+
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec![url.to_string()],
+                read_write: None,
+                autoconnect: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+        let urls = get_relay_urls(&client).await;
+        assert_eq!(urls, vec![url.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn set_relays_rejects_invalid_urls_for_each_mode() {
+        let client = Client::new(Keys::generate());
+
+        for mode in ["read", "write", "both"] {
+            let err = set_relays(
+                &client,
+                RelaysSetArgs {
+                    urls: vec!["not-a-url".to_string()],
+                    read_write: Some(mode.to_string()),
+                    autoconnect: Some(false),
+                },
+            )
+            .await
+            .unwrap_err();
+
+            assert!(err.to_string().contains("add relay"));
+        }
+    }
+
+    #[tokio::test]
+    async fn set_relays_rejects_invalid_mode_before_touching_urls() {
+        let client = Client::new(Keys::generate());
+
+        let err = set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://read.example.com".to_string()],
+                read_write: Some("nope".to_string()),
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("read_write must be one of"));
+    }
+
+    #[tokio::test]
+    async fn connect_relays_connects_specific_urls() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let client = Client::new(Keys::generate());
+        client.add_relay(&url).await.unwrap();
+
+        connect_relays(
+            &client,
+            RelaysConnectArgs {
+                urls: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn connect_relays_connects_all_when_urls_missing() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let client = Client::new(Keys::generate());
+        client.add_relay(&url).await.unwrap();
+
+        connect_relays(&client, RelaysConnectArgs { urls: None })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn connect_relays_rejects_invalid_url() {
+        let client = Client::new(Keys::generate());
+
+        let err = connect_relays(
+            &client,
+            RelaysConnectArgs {
+                urls: Some(vec!["not-a-url".to_string()]),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("connect relay"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_relays_removes_specific_and_all_relays() {
+        let client = Client::new(Keys::generate());
+        client.add_relay("wss://one.example.com").await.unwrap();
+        client.add_relay("wss://two.example.com").await.unwrap();
+
+        disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: Some(vec!["wss://one.example.com".to_string()]),
+                force_remove: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+
+        let urls = get_relay_urls(&client).await;
+        assert_eq!(urls, vec!["wss://two.example.com".to_string()]);
+
+        disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: None,
+                force_remove: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(get_relay_urls(&client).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disconnect_relays_force_removes_specific_and_all_relays() {
+        let client = Client::new(Keys::generate());
+        client.add_relay("wss://one.example.com").await.unwrap();
+        client.add_relay("wss://two.example.com").await.unwrap();
+
+        disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: Some(vec!["wss://one.example.com".to_string()]),
+                force_remove: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+        let urls = get_relay_urls(&client).await;
+        assert_eq!(urls, vec!["wss://two.example.com".to_string()]);
+
+        disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: None,
+                force_remove: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(get_relay_urls(&client).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disconnect_relays_rejects_invalid_url() {
+        let client = Client::new(Keys::generate());
+
+        let err = disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: Some(vec!["not-a-url".to_string()]),
+                force_remove: Some(false),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("remove relay"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_relays_force_rejects_invalid_url() {
+        let client = Client::new(Keys::generate());
+
+        let err = disconnect_relays(
+            &client,
+            RelaysDisconnectArgs {
+                urls: Some(vec!["not-a-url".to_string()]),
+                force_remove: Some(true),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.to_string().contains("remove relay"));
+    }
+
+    #[tokio::test]
+    async fn list_relays_get_urls_and_status_summary_report_current_relays() {
+        let client = Client::new(Keys::generate());
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec![
+                    "wss://read.example.com".to_string(),
+                    "wss://both.example.com".to_string(),
+                ],
+                read_write: Some("read".to_string()),
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://write.example.com".to_string()],
+                read_write: Some("write".to_string()),
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+        set_relays(
+            &client,
+            RelaysSetArgs {
+                urls: vec!["wss://both.example.com".to_string()],
+                read_write: None,
+                autoconnect: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = list_relays(&client).await.unwrap();
+        let urls = get_relay_urls(&client).await;
+        let summary = status_summary(&client).await.unwrap();
+        let row_map: HashMap<_, _> = rows.into_iter().map(|row| (row.url.clone(), row)).collect();
+
+        let url_set: HashSet<_> = urls.into_iter().collect();
+        assert_eq!(
+            url_set,
+            HashSet::from([
+                "wss://read.example.com".to_string(),
+                "wss://write.example.com".to_string(),
+                "wss://both.example.com".to_string(),
+            ])
+        );
+        assert_eq!(summary.get("relay_count"), Some(&"3".to_string()));
+        assert_eq!(row_map.len(), 3);
+
+        let read_row = row_map.get("wss://read.example.com").unwrap();
+        assert!(read_row.read);
+        assert!(!read_row.write);
+        assert!(!read_row.status.is_empty());
+
+        let write_row = row_map.get("wss://write.example.com").unwrap();
+        assert!(!write_row.read);
+        assert!(write_row.write);
+        assert!(!write_row.status.is_empty());
+
+        let both_row = row_map.get("wss://both.example.com").unwrap();
+        assert!(both_row.read);
+        assert!(both_row.write);
+        assert!(!both_row.status.is_empty());
     }
 }
