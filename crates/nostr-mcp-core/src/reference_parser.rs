@@ -231,7 +231,10 @@ mod tests {
         assert_eq!(references.len(), 1);
         assert_eq!(references[0].reference_type, ReferenceType::Nprofile);
         assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
-        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+        assert_eq!(
+            references[0].relays.as_ref().unwrap(),
+            &vec![relay.to_string()]
+        );
     }
 
     #[test]
@@ -255,9 +258,15 @@ mod tests {
         assert_eq!(references.len(), 1);
         assert_eq!(references[0].reference_type, ReferenceType::Nevent);
         assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
-        assert_eq!(references[0].event_id.as_deref(), Some(event_id_hex.as_str()));
+        assert_eq!(
+            references[0].event_id.as_deref(),
+            Some(event_id_hex.as_str())
+        );
         assert_eq!(references[0].kind, Some(event.kind.as_u16()));
-        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+        assert_eq!(
+            references[0].relays.as_ref().unwrap(),
+            &vec![relay.to_string()]
+        );
     }
 
     #[test]
@@ -277,7 +286,10 @@ mod tests {
         assert_eq!(references[0].pubkey.as_deref(), Some(pubkey_hex.as_str()));
         assert_eq!(references[0].kind, Some(coordinate.kind.as_u16()));
         assert_eq!(references[0].identifier.as_deref(), Some("post-1"));
-        assert_eq!(references[0].relays.as_ref().unwrap(), &vec![relay.to_string()]);
+        assert_eq!(
+            references[0].relays.as_ref().unwrap(),
+            &vec![relay.to_string()]
+        );
     }
 
     #[test]

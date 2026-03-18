@@ -457,7 +457,13 @@ mod tests {
         let filter =
             EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap();
 
-        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(
+            filter
+                .authors
+                .as_ref()
+                .unwrap()
+                .contains(&keys.public_key())
+        );
         assert!(filter.since.is_some());
         assert_eq!(filter.until, None);
     }
@@ -478,7 +484,13 @@ mod tests {
         let filter =
             EventFilterService::preset_filter(Keys::generate().public_key(), &args).unwrap();
 
-        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(
+            filter
+                .authors
+                .as_ref()
+                .unwrap()
+                .contains(&keys.public_key())
+        );
         assert_eq!(filter.since, Some(Timestamp::from(10)));
         assert_eq!(filter.until, Some(Timestamp::from(20)));
     }
@@ -716,7 +728,13 @@ mod tests {
 
         let filters = EventFilterService::query_filters(&args).unwrap();
 
-        assert!(filters[0].authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(
+            filters[0]
+                .authors
+                .as_ref()
+                .unwrap()
+                .contains(&keys.public_key())
+        );
         assert_eq!(filters[0].limit, Some(2));
         assert_eq!(filters[0].since, Some(Timestamp::from(10)));
         assert_eq!(filters[0].until, Some(Timestamp::from(20)));
@@ -966,7 +984,13 @@ mod tests {
         assert_eq!(filter.search.as_deref(), Some("nostr search"));
         assert!(filter.kinds.as_ref().unwrap().contains(&Kind::TextNote));
         assert!(filter.kinds.as_ref().unwrap().contains(&Kind::from(30023)));
-        assert!(filter.authors.as_ref().unwrap().contains(&keys.public_key()));
+        assert!(
+            filter
+                .authors
+                .as_ref()
+                .unwrap()
+                .contains(&keys.public_key())
+        );
         assert_eq!(filter.limit, Some(9));
         assert_eq!(filter.since, Some(Timestamp::from(10)));
         assert_eq!(filter.until, Some(Timestamp::from(20)));
@@ -1047,7 +1071,10 @@ mod tests {
         let keys = Keys::generate();
         let npub = keys.public_key().to_bech32().unwrap();
 
-        assert_eq!(ensure_non_empty("identifier", "  value  ").unwrap(), "value");
+        assert_eq!(
+            ensure_non_empty("identifier", "  value  ").unwrap(),
+            "value"
+        );
         assert_eq!(parse_public_key(&npub).unwrap(), keys.public_key());
 
         let err = parse_public_key("invalid").unwrap_err();

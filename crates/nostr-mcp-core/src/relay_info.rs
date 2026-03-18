@@ -119,8 +119,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_relay_info_rejects_non_success_status() {
-        let http_url =
-            spawn_single_response_server("404 Not Found", "missing", "text/plain").await;
+        let http_url = spawn_single_response_server("404 Not Found", "missing", "text/plain").await;
         let args = RelayInfoArgs {
             relay_url: http_url,
             timeout_secs: Some(1),
@@ -133,8 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_relay_info_rejects_invalid_json() {
-        let http_url =
-            spawn_single_response_server("200 OK", "{", "application/nostr+json").await;
+        let http_url = spawn_single_response_server("200 OK", "{", "application/nostr+json").await;
         let args = RelayInfoArgs {
             relay_url: http_url,
             timeout_secs: Some(1),
@@ -171,13 +169,8 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_relay_info_surfaces_body_errors() {
-        let http_url = spawn_truncated_response_server(
-            "200 OK",
-            "{",
-            "application/nostr+json",
-            32,
-        )
-        .await;
+        let http_url =
+            spawn_truncated_response_server("200 OK", "{", "application/nostr+json", 32).await;
         let args = RelayInfoArgs {
             relay_url: http_url,
             timeout_secs: Some(1),
@@ -188,11 +181,7 @@ mod tests {
         assert!(err.to_string().contains("relay info body"));
     }
 
-    async fn spawn_single_response_server(
-        status: &str,
-        body: &str,
-        content_type: &str,
-    ) -> String {
+    async fn spawn_single_response_server(status: &str, body: &str, content_type: &str) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let status = status.to_string();

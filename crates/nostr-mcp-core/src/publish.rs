@@ -311,6 +311,28 @@ pub async fn delete_events(
     publish_event_builder(client, builder, args.to_relays).await
 }
 
+#[cfg(test)]
+async fn sign_anonymous_builder<T>(signer: &T, builder: EventBuilder) -> Result<Event, CoreError>
+where
+    T: NostrSigner,
+{
+    let pubkey = signer
+        .get_public_key()
+        .await
+        .map_err(|e| CoreError::operation(format!("get signer pubkey: {e}")))?;
+    let unsigned = builder.build(pubkey);
+    unsigned
+        .sign(signer)
+        .await
+        .map_err(|e| CoreError::operation(format!("sign event: {e}")))
+}
+
+fn sign_anonymous_builder_with_generated_keys(keys: &Keys, builder: EventBuilder) -> Event {
+    builder
+        .sign_with_keys(keys)
+        .expect("generated anonymous keys should sign a validated builder")
+}
+
 pub async fn post_anonymous_note(
     client: &Client,
     args: PostAnonymousArgs,
@@ -325,9 +347,7 @@ pub async fn post_anonymous_note(
         builder = builder.pow(pow);
     }
 
-    let event = builder
-        .sign_with_keys(&keys)
-        .map_err(|e| CoreError::operation(format!("sign event: {e}")))?;
+    let event = sign_anonymous_builder_with_generated_keys(&keys, builder);
 
     publish_signed_event(
         client,
@@ -410,10 +430,7 @@ fn ensure_tag_value(label: &str, value: &str) -> Result<String, CoreError> {
 fn group_chat_tags(args: &PostGroupChatArgs) -> Result<Vec<Tag>, CoreError> {
     let mut tags = Vec::new();
 
-    tags.push(
-        Tag::parse(&["h".to_string(), args.group_id.clone()])
-            .map_err(|e| CoreError::operation(format!("group tag: {e}")))?,
-    );
+    tags.push(Tag::custom(TagKind::h(), [args.group_id.clone()]));
 
     if let Some(ref reply_id) = args.reply_to_id {
         let event_id = EventId::from_hex(reply_id)
@@ -422,15 +439,14 @@ fn group_chat_tags(args: &PostGroupChatArgs) -> Result<Vec<Tag>, CoreError> {
         let relay = args.reply_to_relay.as_deref().unwrap_or("");
         let pubkey = args.reply_to_pubkey.as_deref().unwrap_or("");
 
-        tags.push(
-            Tag::parse(&[
-                "q".to_string(),
+        tags.push(Tag::custom(
+            TagKind::custom("q"),
+            [
                 event_id.to_hex(),
                 relay.to_string(),
                 pubkey.to_string(),
-            ])
-            .map_err(|e| CoreError::operation(format!("reply tag: {e}")))?,
-        );
+            ],
+        ));
     }
 
     Ok(tags)
@@ -499,14 +515,17 @@ fn reaction_payload(args: &PostReactionArgs) -> Result<(ReactionTarget, String),
 #[cfg(test)]
 mod tests {
     use super::{
-        create_text_event, delete_events, group_chat_tags, long_form_tags, parse_signed_event,
-        parse_unsigned_event, post_long_form, post_text_note, post_thread, publish_signed_event,
-        reaction_payload, repost_builder, sign_unsigned_event, stringify_failed_relays,
-        thread_tags,
+        create_text_event, delete_events, group_chat_tags, long_form_tags, parse_coordinate,
+        parse_signed_event, parse_unsigned_event, post_anonymous_note, post_group_chat,
+        post_long_form, post_reaction, post_repost, post_text_note, post_thread,
+        publish_signed_event, reaction_payload, repost_builder, sign_anonymous_builder,
+        sign_unsigned_event,
+        stringify_failed_relays, thread_tags,
     };
     use nostr_mcp_types::publish::{
         CreateTextArgs, DeleteEventsArgs, PostGroupChatArgs, PostLongFormArgs, PostReactionArgs,
-        PostTextArgs, PostThreadArgs, PublishSignedEventArgs, SignEventArgs,
+        PostAnonymousArgs, PostRepostArgs, PostTextArgs, PostThreadArgs,
+        PublishSignedEventArgs, SignEventArgs,
     };
     use nostr_relay_builder::MockRelay;
     use nostr_sdk::prelude::*;
@@ -560,6 +579,20 @@ mod tests {
             .unwrap()
             .iter()
             .find(|event| event.content == content)
+            .unwrap()
+            .clone()
+    }
+
+    async fn find_latest_authored_event_by_kind(client: &Client, author: PublicKey, kind: Kind) -> Event {
+        client
+            .fetch_events(
+                Filter::new().kind(kind).author(author).limit(10),
+                std::time::Duration::from_secs(1),
+            )
+            .await
+            .unwrap()
+            .iter()
+            .next()
             .unwrap()
             .clone()
     }
@@ -704,6 +737,35 @@ mod tests {
         let tags = group_chat_tags(&args).unwrap();
         let as_vec: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
         assert!(as_vec.contains(&vec!["h".to_string(), "group".to_string()]));
+    }
+
+    #[test]
+    fn group_chat_tags_include_reply_reference_and_reject_invalid_reply_id() {
+        let keys = Keys::generate();
+        let reply = signed_text_note(&keys, "reply");
+        let args = PostGroupChatArgs {
+            content: "content".to_string(),
+            group_id: "group".to_string(),
+            reply_to_id: Some(reply.id.to_hex()),
+            reply_to_relay: Some("wss://relay.example.com".to_string()),
+            reply_to_pubkey: Some(keys.public_key().to_hex()),
+            pow: None,
+            to_relays: None,
+        };
+
+        let tags = group_chat_tags(&args).unwrap();
+        let as_vec: Vec<Vec<String>> = tags.into_iter().map(|t| t.to_vec()).collect();
+        assert!(as_vec.contains(&vec![
+            "q".to_string(),
+            reply.id.to_hex(),
+            "wss://relay.example.com".to_string(),
+            keys.public_key().to_hex(),
+        ]));
+
+        let mut invalid = args;
+        invalid.reply_to_id = Some("nope".to_string());
+        let err = group_chat_tags(&invalid).unwrap_err();
+        assert!(err.to_string().contains("invalid event id"));
     }
 
     #[test]
@@ -1212,6 +1274,92 @@ mod tests {
         assert!(err.to_string().contains("invalid relay url"));
     }
 
+    #[test]
+    fn repost_builder_applies_pow() {
+        let target_keys = Keys::generate();
+        let target = EventBuilder::text_note("hello")
+            .sign_with_keys(&target_keys)
+            .unwrap();
+        let reposter_keys = Keys::generate();
+
+        let builder = repost_builder(&target, None, Some(1)).unwrap();
+        let unsigned = builder.build(reposter_keys.public_key());
+
+        assert!(unsigned.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+    }
+
+    #[tokio::test]
+    async fn post_repost_covers_success_and_error_paths() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let keys = Keys::generate();
+        let client = connected_client(keys.clone(), &url).await;
+        let target = signed_text_note(&Keys::generate(), "repost-target");
+
+        let result = post_repost(
+            &client,
+            PostRepostArgs {
+                event_json: target.as_json(),
+                relay_hint: None,
+                pow: Some(1),
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.success, vec![url.to_string()]);
+        let repost = find_latest_authored_event_by_kind(&client, keys.public_key(), Kind::Repost).await;
+        assert!(repost.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+
+        let invalid_json = post_repost(
+            &client,
+            PostRepostArgs {
+                event_json: "not json".to_string(),
+                relay_hint: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_json.to_string().contains("invalid event json"));
+
+        let invalid_relay = post_repost(
+            &client,
+            PostRepostArgs {
+                event_json: target.as_json(),
+                relay_hint: Some("bad".to_string()),
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_relay.to_string().contains("invalid relay url"));
+
+        let send_err = post_repost(
+            &Client::new(Keys::generate()),
+            PostRepostArgs {
+                event_json: target.as_json(),
+                relay_hint: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(send_err.to_string().contains("send event"));
+    }
+
+    #[test]
+    fn parse_coordinate_accepts_valid_coordinate() {
+        let keys = Keys::generate();
+        let coordinate = Coordinate::new(Kind::from(30023), keys.public_key()).identifier("article-1");
+
+        let parsed = parse_coordinate(&coordinate.to_string()).unwrap();
+        assert_eq!(parsed.to_string(), coordinate.to_string());
+    }
+
     #[tokio::test]
     async fn delete_events_rejects_missing_targets() {
         let client = Client::new(Keys::generate());
@@ -1260,6 +1408,228 @@ mod tests {
         assert!(err.to_string().contains("invalid event id"));
     }
 
+    #[tokio::test]
+    async fn delete_events_accepts_coordinates_and_pow_and_rejects_invalid_coordinates() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let keys = Keys::generate();
+        let client = connected_client(keys.clone(), &url).await;
+        let coordinate = Coordinate::new(Kind::from(30023), keys.public_key()).identifier("article-1");
+
+        let result = delete_events(
+            &client,
+            DeleteEventsArgs {
+                event_ids: Some(vec!["0".repeat(64)]),
+                coordinates: Some(vec![coordinate.to_string()]),
+                reason: Some("cleanup".to_string()),
+                pow: Some(1),
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.success, vec![url.to_string()]);
+        let deletion =
+            find_latest_authored_event_by_kind(&client, keys.public_key(), Kind::EventDeletion).await;
+        assert!(deletion.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+        assert!(deletion.tags.iter().any(|tag| {
+            let values = tag.as_slice();
+            values.len() == 2 && values[0] == "a" && values[1] == coordinate.to_string()
+        }));
+
+        let event_only = delete_events(
+            &client,
+            DeleteEventsArgs {
+                event_ids: Some(vec!["1".repeat(64)]),
+                coordinates: None,
+                reason: None,
+                pow: None,
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(event_only.success, vec![url.to_string()]);
+
+        let empty_event_ids = delete_events(
+            &client,
+            DeleteEventsArgs {
+                event_ids: Some(vec![]),
+                coordinates: None,
+                reason: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(empty_event_ids
+            .to_string()
+            .contains("event_ids must not be empty"));
+
+        let empty_coordinates = delete_events(
+            &client,
+            DeleteEventsArgs {
+                event_ids: None,
+                coordinates: Some(vec![]),
+                reason: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(empty_coordinates
+            .to_string()
+            .contains("coordinates must not be empty"));
+
+        let invalid_coordinate = delete_events(
+            &client,
+            DeleteEventsArgs {
+                event_ids: None,
+                coordinates: Some(vec!["bad-coordinate".to_string()]),
+                reason: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_coordinate.to_string().contains("invalid coordinate"));
+    }
+
+    #[tokio::test]
+    async fn post_anonymous_note_covers_success_and_error_paths() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let client = connected_client(Keys::generate(), &url).await;
+
+        let result = post_anonymous_note(
+            &client,
+            PostAnonymousArgs {
+                content: "anon".to_string(),
+                tags: Some(vec![vec!["t".to_string(), "anon".to_string()]]),
+                pow: Some(1),
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.success, vec![url.to_string()]);
+        let author = PublicKey::from_hex(&result.pubkey).unwrap();
+        let event = find_authored_event_by_content(&client, author, Kind::TextNote, "anon").await;
+        assert!(event.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+
+        let invalid_tag = post_anonymous_note(
+            &client,
+            PostAnonymousArgs {
+                content: "anon".to_string(),
+                tags: Some(vec![vec![]]),
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_tag.to_string().contains("invalid tag"));
+
+        let send_err = post_anonymous_note(
+            &Client::new(Keys::generate()),
+            PostAnonymousArgs {
+                content: "anon".to_string(),
+                tags: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(send_err.to_string().contains("send event"));
+    }
+
+    #[tokio::test]
+    async fn sign_anonymous_builder_reports_public_key_and_sign_errors() {
+        let builder = EventBuilder::text_note("anon");
+
+        let public_key_err = sign_anonymous_builder(
+            &PublicKeyErrorSigner(Keys::generate()),
+            builder.clone(),
+        )
+        .await
+        .unwrap_err();
+        assert!(public_key_err
+            .to_string()
+            .contains("get signer pubkey"));
+
+        let sign_err = sign_anonymous_builder(&SignEventErrorSigner(Keys::generate()), builder)
+            .await
+            .unwrap_err();
+        assert!(sign_err.to_string().contains("sign event"));
+    }
+
+    #[tokio::test]
+    async fn post_group_chat_covers_success_and_error_paths() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let keys = Keys::generate();
+        let client = connected_client(keys.clone(), &url).await;
+        let reply = signed_text_note(&Keys::generate(), "reply");
+
+        let result = post_group_chat(
+            &client,
+            PostGroupChatArgs {
+                content: "chat".to_string(),
+                group_id: "group".to_string(),
+                reply_to_id: Some(reply.id.to_hex()),
+                reply_to_relay: Some(url.to_string()),
+                reply_to_pubkey: Some(reply.pubkey.to_hex()),
+                pow: Some(1),
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.success, vec![url.to_string()]);
+        let event = find_authored_event_by_content(&client, keys.public_key(), Kind::from(9), "chat").await;
+        assert!(event.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+        assert!(event.tags.iter().any(|tag| {
+            let values = tag.as_slice();
+            values.len() == 2 && values[0] == "h" && values[1] == "group"
+        }));
+
+        let invalid_reply = post_group_chat(
+            &client,
+            PostGroupChatArgs {
+                content: "chat".to_string(),
+                group_id: "group".to_string(),
+                reply_to_id: Some("nope".to_string()),
+                reply_to_relay: None,
+                reply_to_pubkey: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_reply.to_string().contains("invalid event id"));
+
+        let send_err = post_group_chat(
+            &Client::new(Keys::generate()),
+            PostGroupChatArgs {
+                content: "chat".to_string(),
+                group_id: "group".to_string(),
+                reply_to_id: None,
+                reply_to_relay: None,
+                reply_to_pubkey: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(send_err.to_string().contains("send event"));
+    }
+
     #[test]
     fn reaction_defaults_to_plus() {
         let args = PostReactionArgs {
@@ -1274,6 +1644,126 @@ mod tests {
 
         let (_target, content) = reaction_payload(&args).unwrap();
         assert_eq!(content, "+");
+    }
+
+    #[test]
+    fn reaction_payload_accepts_explicit_fields_and_rejects_invalid_inputs() {
+        let event_id = "0".repeat(64);
+        let pubkey = Keys::generate().public_key().to_hex();
+        let args = PostReactionArgs {
+            event_id: event_id.clone(),
+            event_pubkey: pubkey.clone(),
+            content: Some("zap".to_string()),
+            event_kind: Some(1),
+            relay_hint: Some("wss://relay.example.com".to_string()),
+            pow: None,
+            to_relays: None,
+        };
+
+        let (target, content) = reaction_payload(&args).unwrap();
+        assert_eq!(content, "zap");
+        assert_eq!(target.event_id.to_hex(), event_id);
+        assert_eq!(target.public_key.to_hex(), pubkey);
+        assert_eq!(target.kind, Some(Kind::TextNote));
+        assert_eq!(
+            target.relay_hint.as_ref().map(ToString::to_string),
+            Some("wss://relay.example.com".to_string())
+        );
+
+        let invalid_event = reaction_payload(&PostReactionArgs {
+            event_id: "bad".to_string(),
+            event_pubkey: pubkey.clone(),
+            content: Some("zap".to_string()),
+            event_kind: Some(1),
+            relay_hint: Some("wss://relay.example.com".to_string()),
+            pow: None,
+            to_relays: None,
+        })
+        .unwrap_err();
+        assert!(invalid_event.to_string().contains("invalid event id"));
+
+        let invalid_pubkey = reaction_payload(&PostReactionArgs {
+            event_id: event_id.clone(),
+            event_pubkey: "bad".to_string(),
+            content: Some("zap".to_string()),
+            event_kind: Some(1),
+            relay_hint: Some("wss://relay.example.com".to_string()),
+            pow: None,
+            to_relays: None,
+        })
+        .unwrap_err();
+        assert!(invalid_pubkey.to_string().contains("invalid event pubkey"));
+
+        let invalid_relay = reaction_payload(&PostReactionArgs {
+            event_id,
+            event_pubkey: pubkey,
+            content: Some("zap".to_string()),
+            event_kind: Some(1),
+            relay_hint: Some("bad".to_string()),
+            pow: None,
+            to_relays: None,
+        })
+        .unwrap_err();
+        assert!(invalid_relay.to_string().contains("invalid relay url"));
+    }
+
+    #[tokio::test]
+    async fn post_reaction_covers_success_and_error_paths() {
+        let relay = MockRelay::run().await.unwrap();
+        let url = relay.url().await;
+        let keys = Keys::generate();
+        let client = connected_client(keys.clone(), &url).await;
+        let target = signed_text_note(&Keys::generate(), "react-target");
+
+        let result = post_reaction(
+            &client,
+            PostReactionArgs {
+                event_id: target.id.to_hex(),
+                event_pubkey: target.pubkey.to_hex(),
+                content: Some("zap".to_string()),
+                event_kind: Some(1),
+                relay_hint: Some(url.to_string()),
+                pow: Some(1),
+                to_relays: Some(vec![url.to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.success, vec![url.to_string()]);
+        let event = find_latest_authored_event_by_kind(&client, keys.public_key(), Kind::Reaction).await;
+        assert!(event.tags.iter().any(|tag| tag.kind() == TagKind::Nonce));
+
+        let invalid_input = post_reaction(
+            &client,
+            PostReactionArgs {
+                event_id: "bad".to_string(),
+                event_pubkey: target.pubkey.to_hex(),
+                content: None,
+                event_kind: None,
+                relay_hint: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(invalid_input.to_string().contains("invalid event id"));
+
+        let send_err = post_reaction(
+            &Client::new(Keys::generate()),
+            PostReactionArgs {
+                event_id: target.id.to_hex(),
+                event_pubkey: target.pubkey.to_hex(),
+                content: Some("zap".to_string()),
+                event_kind: None,
+                relay_hint: None,
+                pow: None,
+                to_relays: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(send_err.to_string().contains("send event"));
     }
 
     #[test]
